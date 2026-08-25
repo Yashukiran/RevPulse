@@ -130,14 +130,23 @@ def _make_links(db, campaign: Campaign, customer_ids: list[int], discount_pct: f
                         "amount_inr": existing.amount_inr, "reused": True})
             continue
         amount = max(int(round(_aov(db, cid) * (1 - discount_pct / 100))), 1)
-        link = _create_link(
-            amount_inr=amount,
-            description=f"{campaign.offer_desc} — Biryani House (code {campaign.offer_code})",
-            customer_name=cust.name, customer_email=cust.email, customer_phone=cust.phone,
-            reference_id=key,
-            notes={"campaign_id": campaign.id, "offer_code": campaign.offer_code,
-                   "customer_id": cid},
-        )
+        try:
+            link = _create_link(
+                amount_inr=amount,
+                description=f"{campaign.offer_desc} — Biryani House (code {campaign.offer_code})",
+                customer_name=cust.name, customer_email=cust.email, customer_phone=cust.phone,
+                reference_id=key,
+                notes={"campaign_id": campaign.id, "offer_code": campaign.offer_code,
+                       "customer_id": cid},
+            )
+        except Exception as e:
+            # One customer's link failing must not abandon the batch. Aborting
+            # here used to leave the customers already reached marked as offered
+            # while the campaign as a whole failed — and the frequency cap then
+            # blocked the retry, so a partial failure poisoned its own recovery.
+            # Record the failure against that customer and carry on.
+            out.append({"customer_id": cid, "error": str(e)[:200]})
+            continue
         row = PaymentLink(campaign_id=campaign.id, customer_id=cid,
                           razorpay_link_id=link["id"], short_url=link["short_url"],
                           amount_inr=amount, offer_code=campaign.offer_code,
@@ -175,13 +184,22 @@ def create_recovery_offer(db, args: dict) -> dict:
     campaign.budget_inr = est_offer_value_inr(args, db) * len(treated)
 
     links = _make_links(db, campaign, treated, discount, "create_recovery_offer", args)
+    reached = [l for l in links if not l.get("error")]
+    failed = [l for l in links if l.get("error")]
+    if not reached:
+        raise RuntimeError(failed[0]["error"] if failed else "no payment links created")
+
+    # Budget reserves against the customers actually reached, not the ones we
+    # intended to reach.
+    campaign.budget_inr = est_offer_value_inr(args, db) * len(reached)
     db.add(BudgetSpend(date=datetime.utcnow().strftime("%Y-%m-%d"),
                        campaign_id=campaign.id, amount_inr=campaign.budget_inr,
                        note=f"recovery offer {campaign.offer_code}"))
     db.commit()
     return {"campaign_id": campaign.id, "offer_code": campaign.offer_code,
-            "links": links, "incentive_budget_inr": campaign.budget_inr,
-            "treated": len(treated), "control": len(control),
+            "links": reached, "incentive_budget_inr": campaign.budget_inr,
+            "failed": failed,
+            "treated": len(reached), "control": len(control),
             "holdout_note": (f"{len(control)} of {len(customer_ids)} customers held back as a "
                              f"control group to measure incrementality"
                              if control else
