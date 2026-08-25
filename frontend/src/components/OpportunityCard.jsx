@@ -103,6 +103,24 @@ function EvidenceList({ opp }) {
                 )}
               </div>
             )}
+            {c.order_history && (
+              <div className="mt-2 border-l-2 border-slate-700 pl-2">
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Ordered <span className="text-slate-100 font-semibold">{c.order_history.orders}</span>{' '}
+                  times, roughly every{' '}
+                  <span className="text-slate-100 font-semibold">{c.order_history.median_gap_days}</span>{' '}
+                  days — then silent for{' '}
+                  <span className="text-rose-400 font-semibold">{c.order_history.silent_days}</span> days
+                  {c.order_history.silent_multiple
+                    ? ` (${c.order_history.silent_multiple}x their normal gap)`
+                    : ''}
+                  .
+                </p>
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Detected from transactions alone — no review needed.
+                </p>
+              </div>
+            )}
           </li>
         ))}
       </ul>

@@ -37,6 +37,20 @@ WINBACK_DISCOUNT_PCT = 15       # within the 20% policy cap
 WINBACK_EXPIRY_DAYS = 7
 MAX_SEGMENT = 10                # one proposal stays reviewable by a human
 
+# ---- lapsed-customer detection (transactions only, no reviews, no model) ----
+# Reviews exist for a small minority of customers; transaction behaviour exists
+# for all of them. Behaviour is therefore the PRIMARY churn signal and reviews
+# are the enrichment layer that explains WHY someone is leaving.
+# Deliberately lower than the churn threshold, and the reason matters: a
+# churn-signal customer is still active and merely says they may leave, so we
+# hold a higher bar before spending on someone who might not have gone anywhere.
+# A lapsed customer has already stopped — the loss is realised, not hypothetical
+# — so an established regular is worth recovering at a lower lifetime value.
+LAPSED_MIN_LTV_INR = 5000
+LAPSED_MIN_ORDERS = 5           # enough history to have an established rhythm
+LAPSED_MIN_SILENT_DAYS = 60     # absolute floor, regardless of cadence
+LAPSED_CADENCE_MULTIPLE = 3.0   # silent for 3x their own normal gap
+
 # Projection assumption. We have no historical campaign data for this merchant,
 # so this is an explicitly stated assumption, never presented as a forecast.
 ASSUMED_REDEMPTION_RATE = 0.30
@@ -192,6 +206,116 @@ def detect_churn_risk(db, ignore_open: bool = False,
     }
 
 
+def _median(values: list[float]) -> float:
+    ordered = sorted(values)
+    n = len(ordered)
+    if not n:
+        return 0.0
+    mid = n // 2
+    return ordered[mid] if n % 2 else (ordered[mid - 1] + ordered[mid]) / 2
+
+
+def detect_lapsed_high_value(db, ignore_open: bool = False,
+                             stats: dict | None = None) -> dict | None:
+    """Find valuable regulars who have quietly stopped ordering.
+
+    Purely behavioural: no review required, no model involved. A customer is
+    lapsed when they have real history (spend and order count above the line),
+    an established ordering rhythm, and have now been silent for far longer than
+    that rhythm — measured against their own past behaviour, not a global rule,
+    because a weekly customer going quiet for a month means something a
+    quarterly customer going quiet for a month does not.
+
+    This is the detector that does not depend on anyone writing a review.
+    """
+    ref_now = datetime.utcnow()
+    orders_by_customer: dict[int, list] = {}
+    for o in db.query(Order).order_by(Order.ts).all():
+        orders_by_customer.setdefault(o.customer_id, []).append(o)
+
+    blocked = _blocked_customer_ids(db)
+    already_covered = set() if ignore_open else _open_opportunity_customers(db)
+
+    candidates: list[dict] = []
+    behaviour_matches = 0
+    excluded_by_policy = 0
+    excluded_covered = 0
+
+    for cid, orders in orders_by_customer.items():
+        if len(orders) < LAPSED_MIN_ORDERS:
+            continue
+        ltv = sum(o.amount_inr for o in orders)
+        if ltv < LAPSED_MIN_LTV_INR:
+            continue
+
+        gaps = [(orders[i].ts - orders[i - 1].ts).days for i in range(1, len(orders))]
+        cadence = _median([g for g in gaps if g >= 0]) or 0.0
+        silent_days = (ref_now - orders[-1].ts).days
+        if silent_days < LAPSED_MIN_SILENT_DAYS:
+            continue
+        if cadence and silent_days < cadence * LAPSED_CADENCE_MULTIPLE:
+            continue
+
+        behaviour_matches += 1
+        if cid in already_covered:
+            excluded_covered += 1
+            continue
+        if cid in blocked:
+            excluded_by_policy += 1
+            continue
+        cust = db.get(Customer, cid)
+        if not cust:
+            continue
+        candidates.append({
+            "customer_id": cid,
+            "name": cust.name,
+            "zone": cust.zone,
+            "ltv_inr": int(ltv),
+            "aov_inr": int(round(ltv / len(orders))),
+            "last_order": orders[-1].ts.isoformat(),
+            "order_history": {
+                "orders": len(orders),
+                "median_gap_days": int(round(cadence)),
+                "silent_days": silent_days,
+                "silent_multiple": round(silent_days / cadence, 1) if cadence else None,
+                "first_order": orders[0].ts.isoformat(),
+            },
+        })
+
+    if stats is not None:
+        stats.update({
+            "lapsed_behaviour_matches": behaviour_matches,
+            "lapsed_excluded_recent_offer": excluded_by_policy,
+            "lapsed_excluded_already_proposed": excluded_covered,
+            "lapsed_min_ltv_inr": LAPSED_MIN_LTV_INR,
+            "lapsed_min_silent_days": LAPSED_MIN_SILENT_DAYS,
+        })
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda c: -c["ltv_inr"])
+    targets = candidates[:MAX_SEGMENT]
+    money = compute_money(targets)
+
+    return {
+        "kind": "lapsed_high_value",
+        "targets": targets,
+        "revenue_at_risk_inr": money["revenue_at_risk_inr"],
+        "recoverable_revenue_inr": money["recoverable_revenue_inr"],
+        "expected_revenue_inr": money["expected_revenue_inr"],
+        "max_exposure_inr": money["max_exposure_inr"],
+        "excluded_by_policy": excluded_by_policy,
+        "proposed_tool": "create_recovery_offer",
+        "proposed_args": {
+            "customer_ids": [c["customer_id"] for c in targets],
+            "discount_pct": WINBACK_DISCOUNT_PCT,
+            "expiry_days": WINBACK_EXPIRY_DAYS,
+            "reason": "High-value regulars who have stopped ordering",
+        },
+    }
+
+
 def _explain(candidate: dict) -> str:
     """One short model call: turn the evidence into a merchant-readable rationale.
 
@@ -200,8 +324,11 @@ def _explain(candidate: dict) -> str:
     is still fully usable without the model.
     """
     targets = candidate["targets"]
+    lapsed = candidate["kind"] == "lapsed_high_value"
+    signal = ("have stopped ordering after months of regular business"
+              if lapsed else "left churn-signal reviews recently")
     fallback = (
-        f"{len(targets)} high-value customers left churn-signal reviews recently. "
+        f"{len(targets)} high-value customers {signal}. "
         f"Together they have spent ₹{candidate['revenue_at_risk_inr']:,} with this "
         f"merchant. A {WINBACK_DISCOUNT_PCT}% win-back offer costs at most "
         f"₹{candidate['max_exposure_inr']:,} and targets exactly the customers whose "
@@ -211,13 +338,18 @@ def _explain(candidate: dict) -> str:
         import anthropic
 
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        def _fact(t: dict) -> dict:
+            base = {"name": t["name"], "ltv_inr": t["ltv_inr"], "aov_inr": t["aov_inr"],
+                    "last_order": t["last_order"]}
+            if "review" in t:
+                base["review"] = t["review"]["text"][:240]
+                base["rating"] = t["review"]["rating"]
+            if "order_history" in t:
+                base["order_history"] = t["order_history"]
+            return base
+
         facts = {
-            "customers": [
-                {"name": t["name"], "ltv_inr": t["ltv_inr"], "aov_inr": t["aov_inr"],
-                 "last_order": t["last_order"], "review": t["review"]["text"][:240],
-                 "rating": t["review"]["rating"]}
-                for t in targets[:6]
-            ],
+            "customers": [_fact(t) for t in targets[:6]],
             "count": len(targets),
             "revenue_at_risk_inr": candidate["revenue_at_risk_inr"],
             "max_exposure_inr": candidate["max_exposure_inr"],
@@ -232,10 +364,15 @@ def _explain(candidate: dict) -> str:
                 "restaurant. Below is a revenue opportunity you detected, with figures "
                 "already computed from the merchant's transaction data.\n\n"
                 f"{json.dumps(facts, indent=2)}\n\n"
-                "Write 2-3 sentences for the merchant explaining what you found, quoting "
-                "one customer's words as evidence, and why acting now protects revenue. "
-                "Use ONLY the figures given — never invent a number. Plain language, no "
-                "headings, no bullet points."
+                + ("Write 2-3 sentences for the merchant explaining what you found, "
+                   "naming one customer and how long they have been silent relative to "
+                   "their normal ordering rhythm, and why acting now protects revenue. "
+                   if lapsed else
+                   "Write 2-3 sentences for the merchant explaining what you found, "
+                   "quoting one customer's words as evidence, and why acting now "
+                   "protects revenue. ")
+                + "Use ONLY the figures given — never invent a number. Plain language, no "
+                  "headings, no bullet points."
             )}],
         )
         text = msg.content[0].text.strip()
@@ -274,15 +411,50 @@ def scan(db, actor: str = "agent", stats: dict | None = None) -> list[Opportunit
                                         "signals for revenue opportunities.",
                               verdict=policy.ALLOWED, rule=None)
     try:
-        candidate = detect_churn_risk(db, stats=stats)
+        # Behaviour first: it covers every customer. Reviews then add the ones
+        # whose words say they are leaving even though they have not yet gone
+        # quiet — the two detectors catch different people.
+        candidates = [c for c in (detect_lapsed_high_value(db, stats=stats),
+                                  detect_churn_risk(db, stats=stats)) if c]
     except Exception as e:
         audit.complete(db, entry, status="failed", error=str(e))
         raise
 
-    if not candidate:
+    if not candidates:
         audit.complete(db, entry, status="success")
         return []
 
+    created: list[Opportunity] = []
+    for candidate in candidates:
+        created.append(_raise_opportunity(db, candidate, entry))
+
+    audit.complete(db, entry, status="success")
+    for opp in created:
+        audit.broadcast_opportunity(serialize(opp))
+    return created
+
+
+TITLES = {
+    "churn_risk_winback": "{n} high-value customers at risk of churning",
+    "lapsed_high_value": "{n} high-value customers have gone quiet",
+}
+
+DETECTION_RULES = {
+    "churn_risk_winback": (
+        f"churn-signal review in the last {CHURN_LOOKBACK_DAYS} days AND "
+        f"lifetime spend ≥ ₹{CHURN_MIN_LTV_INR:,}"
+    ),
+    "lapsed_high_value": (
+        f"lifetime spend ≥ ₹{LAPSED_MIN_LTV_INR:,} AND ≥ {LAPSED_MIN_ORDERS} prior orders "
+        f"AND silent for ≥ {LAPSED_MIN_SILENT_DAYS} days AND longer than "
+        f"{LAPSED_CADENCE_MULTIPLE:g}x their own median gap between orders "
+        f"(transactions only — no review required)"
+    ),
+}
+
+
+def _raise_opportunity(db, candidate: dict, entry) -> Opportunity:
+    """Turn a detector's candidate into a merchant-facing opportunity."""
     rationale = _explain(candidate)
 
     # The guardrails are consulted BEFORE the merchant ever sees the proposal, so
@@ -292,17 +464,15 @@ def scan(db, actor: str = "agent", stats: dict | None = None) -> list[Opportunit
                                            candidate["proposed_args"], db)
 
     excluded = candidate["excluded_by_policy"]
+    kind = candidate["kind"]
     opp = Opportunity(
-        kind=candidate["kind"],
-        title=f"{len(candidate['targets'])} high-value customers at risk of churning",
+        kind=kind,
+        title=TITLES[kind].format(n=len(candidate["targets"])),
         rationale=rationale,
         evidence_json=json.dumps({
             "customers": candidate["targets"],
             "assumption_note": ASSUMPTION_NOTE,
-            "detection_rule": (
-                f"churn-signal review in the last {CHURN_LOOKBACK_DAYS} days AND "
-                f"lifetime spend ≥ ₹{CHURN_MIN_LTV_INR:,}"
-            ),
+            "detection_rule": DETECTION_RULES[kind],
         }),
         customer_ids_json=json.dumps(candidate["proposed_args"]["customer_ids"]),
         revenue_at_risk_inr=candidate["revenue_at_risk_inr"],
@@ -321,9 +491,7 @@ def scan(db, actor: str = "agent", stats: dict | None = None) -> list[Opportunit
     )
     db.add(opp)
     db.commit()
-    audit.complete(db, entry, status="success")
-    audit.broadcast_opportunity(serialize(opp))
-    return [opp]
+    return opp
 
 
 def measured(db, opp: Opportunity) -> dict:

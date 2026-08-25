@@ -7,7 +7,12 @@ The agent is the product, not a chatbot bolted onto a dashboard. Nobody asks it 
 ## The autonomous loop
 
 ```
-churn-risk detection      a high-value customer's own review says they are leaving
+detection                 two independent signals, deliberately not one:
+                          · BEHAVIOUR — a valuable regular has gone silent for far
+                            longer than their own ordering rhythm (transactions
+                            only; works for every customer, no review needed)
+                          · WORDS — a high-value customer's own review says they
+                            are leaving (explains WHY, and shapes the message)
         ↓
 opportunity               evidence + lifetime value at risk + realistically recoverable
                           + expected return + MAXIMUM EXPOSURE
@@ -59,7 +64,7 @@ Customer-protection bounds (frequency cap, dedupe) are enforced as strictly as m
 
 ## Features
 
-0. **The growth agent (the product)** — scans transaction and feedback signals unprompted, raises opportunities with evidence, money maths and a policy verdict already attached, executes on approval, and measures the result. It rescans automatically when new feedback carries a churn signal.
+0. **The growth agent (the product)** — scans transaction *behaviour* (the primary signal, available for 100% of customers) and feedback *language* (the enrichment layer, which explains why) unprompted, raises opportunities with evidence, money maths and a policy verdict already attached, executes on approval, and measures the result. It rescans automatically when new feedback carries a churn signal.
 1. **Review intelligence** — what customers love/hate, theme trends, time-of-day and zone concentration
 2. **Issue & opportunity detection** — clustered recurring problems with click-through to the underlying evidence (actual reviews)
 3. **Reply queue** — urgent/important/routine triage, AI-drafted replies in 3 tones; posting is a gated action
