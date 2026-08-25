@@ -315,12 +315,20 @@ def get_campaign_results(db, **_) -> dict:
     for c in db.query(Campaign).order_by(Campaign.ts.desc()).all():
         links = db.query(PaymentLink).filter_by(campaign_id=c.id).all()
         paid = [l for l in links if l.status == "paid"]
+        # The incentive is only actually paid when a customer redeems: the
+        # discount given away on that order. Budget is what policy RESERVED.
+        pct = float(c.discount_pct or 0)
+        spent = sum(
+            int(round(l.amount_inr / (1 - pct / 100) - l.amount_inr)) if pct < 100 else 0
+            for l in paid
+        )
         out.append({
             "campaign_id": c.id, "kind": c.kind, "segment": c.segment_desc,
             "offer": c.offer_desc, "offer_code": c.offer_code, "status": c.status,
             "targeted": len(json.loads(c.customer_ids_json)),
             "links_created": len(links), "redeemed": len(paid),
             "revenue_attributed_inr": sum(l.amount_inr for l in paid),
+            "incentive_spent_inr": spent,
             "incentive_budget_inr": c.budget_inr,
         })
     return {"campaigns": out}

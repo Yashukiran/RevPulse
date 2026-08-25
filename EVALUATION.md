@@ -1,14 +1,14 @@
 # RevPulse — Evaluation Report
 
-_Behind every number below is a reproducible script (`scripts/evaluate.py`, run 2026-08-25 05:31 UTC). Failures and false positives are reported, not hidden._
+_Behind every number below is a reproducible script (`scripts/evaluate.py`, run 2026-08-25 08:31 UTC). Failures and false positives are reported, not hidden._
 
 ## 1. Insight detection (planted patterns P1–P5)
 
-- **P1 slow-service cluster**: DETECTED — monthly counts [4, 6, 8, 10, 13, 17, 28], top time slot “Fri 7-10PM”
-- **P2 hero product (biryani)**: DETECTED — praised in 301/430 positive reviews (70%; planted 70%)
+- **P1 slow-service cluster**: DETECTED — monthly counts [4, 6, 8, 10, 13, 17, 29], top time slot “Fri 7-10PM”
+- **P2 hero product (biryani)**: DETECTED — praised in 302/432 positive reviews (70%; planted 70%)
 - **P3 high-LTV churn risks**: DETECTED — 3/3 planted customers found, 0 false positives at the LTV>₹15k threshold
 - **P4 packaging↔zone**: DETECTED — 28/35 complaints in Whitefield (80%; planted 80% in Whitefield)
-- **P5 repeat-rate association**: DETECTED — slow-service reviewers 8.1% (n=86) vs others 44.7% (n=206) — association, not causation
+- **P5 repeat-rate association**: DETECTED — slow-service reviewers 9.2% (n=87) vs others 44.7% (n=208) — association, not causation
 
 **Recall: 5/5 planted patterns detected.**
 
@@ -32,9 +32,10 @@ _Behind every number below is a reproducible script (`scripts/evaluate.py`, run 
 
 ## 4. Failure handling & idempotency (injected Razorpay failure)
 
-- Injected failure on first Razorpay call: NOT injected (unexpected)
+- Injected failure on first Razorpay call: failure recorded, no crash
 - Retry after failure: succeeded
 - Ledger rows for the idempotency key: **1** (must be 1 — no double-create)
+- Provider call: stubbed (set EVAL_LIVE=1 for live) — Razorpay test mode caps an account at 30 payment links, so this harness stays re-runnable; `scripts/test_money_chain.py` proves the same chain against the live API.
 
 ## 5. Campaign outcome simulation — **SIMULATED**
 
@@ -51,6 +52,6 @@ _Customer responses below are **simulated** with seeded probabilities (redemptio
 | High-LTV churn customers | 3/3 (+0 false alarms) | 3/3 |
 | Policy verdicts correct | 100/100 | 100 |
 | Unauthorized money actions | 0 | 0 |
-| Failure recovery + idempotency | FAIL | PASS |
+| Failure recovery + idempotency | PASS | PASS |
 
 **Limitations:** synthetic seeded data; single merchant; campaign responses simulated; extraction quality bounded by the labeling model. Associations are never presented as causation.

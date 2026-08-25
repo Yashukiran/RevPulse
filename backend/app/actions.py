@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import time
 from datetime import datetime
 
 from sqlalchemy import func
@@ -25,6 +26,42 @@ from .models import (
 )
 
 
+RATE_LIMIT_BACKOFF_S = (1.0, 3.0, 8.0, 20.0)
+
+
+def _create_link(*, reference_id: str, **kw) -> dict:
+    """Create a Razorpay payment link, handling the two provider-side failures
+    that are not our caller's fault.
+
+    1. Reference already used — our own ledger is the idempotency authority: if
+       we hold a row for this key we never get here. Reaching this path means
+       our ledger lost the record (e.g. the demo-state reset), so we mint a
+       fresh reference and still store it under the original key.
+    2. Rate limiting — retry with backoff rather than failing the campaign.
+    """
+    ref = reference_id
+    last: Exception | None = None
+    for attempt in range(len(RATE_LIMIT_BACKOFF_S) + 1):
+        try:
+            return rzp.create_payment_link(reference_id=ref, **kw)
+        except Exception as e:
+            last = e
+            msg = str(e).lower()
+            if "reference" in msg and "exist" in msg:
+                ref = f"{reference_id[:24]}-{secrets.token_hex(3)}"
+                continue
+            transient = (
+                "too many requests" in msg or "rate limit" in msg or "429" in msg
+                or "connection" in msg or "timed out" in msg or "timeout" in msg
+                or isinstance(e, (ConnectionError, TimeoutError))
+            )
+            if transient and attempt < len(RATE_LIMIT_BACKOFF_S):
+                time.sleep(RATE_LIMIT_BACKOFF_S[attempt])
+                continue
+            raise
+    raise last  # exhausted retries
+
+
 def _aov(db, customer_id: int) -> int:
     v = (db.query(func.avg(Order.amount_inr))
          .filter(Order.customer_id == customer_id).scalar())
@@ -39,7 +76,9 @@ def _make_links(db, campaign: Campaign, customer_ids: list[int], discount_pct: f
                 tool: str, args: dict) -> list[dict]:
     """Create one Razorpay payment link per customer, idempotently."""
     out = []
-    for cid in customer_ids:
+    for i, cid in enumerate(customer_ids):
+        if i:
+            time.sleep(0.25)  # stagger: stay under the provider's burst limit
         cust = db.get(Customer, cid)
         if not cust:
             continue
@@ -51,7 +90,7 @@ def _make_links(db, campaign: Campaign, customer_ids: list[int], discount_pct: f
                         "amount_inr": existing.amount_inr, "reused": True})
             continue
         amount = max(int(round(_aov(db, cid) * (1 - discount_pct / 100))), 1)
-        link = rzp.create_payment_link(
+        link = _create_link(
             amount_inr=amount,
             description=f"{campaign.offer_desc} — Biryani House (code {campaign.offer_code})",
             customer_name=cust.name, customer_email=cust.email, customer_phone=cust.phone,
@@ -130,7 +169,7 @@ def create_payment_link(db, args: dict) -> dict:
         return {"short_url": existing.short_url, "razorpay_link_id": existing.razorpay_link_id,
                 "amount_inr": existing.amount_inr, "reused": True}
     amount = int(args["amount_inr"])
-    link = rzp.create_payment_link(
+    link = _create_link(
         amount_inr=amount, description="Biryani House order",
         customer_name=cust.name, customer_email=cust.email, customer_phone=cust.phone,
         reference_id=key,

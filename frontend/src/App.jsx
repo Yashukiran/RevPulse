@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react'
-import { get, wsURL } from './api'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { get, post, wsURL } from './api'
 import Sidebar from './components/shared/Sidebar'
 import ToastStack from './components/shared/Toast'
 import Overview from './components/Overview'
@@ -39,7 +39,38 @@ export default function App() {
   const [incomingReview, setIncomingReview] = useState(null)
   const [toasts, setToasts] = useState([])
 
+  // The agent run lives here, not inside Action Center, so switching views
+  // mid-run neither cancels it nor throws away the answer.
+  const [agentRun, setAgentRun] = useState({
+    message: '',
+    running: false,
+    result: null,
+    error: null,
+    events: [],
+  })
+  const runningRef = useRef(false)
+
   const bumpRefresh = useCallback(() => setRefresh((n) => n + 1), [])
+
+  const setAgentMessage = useCallback((message) => {
+    setAgentRun((s) => ({ ...s, message }))
+  }, [])
+
+  const runAgent = useCallback(
+    (message) => {
+      if (!message.trim() || runningRef.current) return
+      runningRef.current = true
+      setAgentRun({ message, running: true, result: null, error: null, events: [] })
+      post('/api/agent/run', { message })
+        .then((res) => setAgentRun((s) => ({ ...s, running: false, result: res })))
+        .catch((e) => setAgentRun((s) => ({ ...s, running: false, error: e.message })))
+        .finally(() => {
+          runningRef.current = false
+          bumpRefresh()
+        })
+    },
+    [bumpRefresh]
+  )
 
   const addToast = useCallback((text) => {
     const id = `${Date.now()}-${Math.random()}`
@@ -117,6 +148,57 @@ export default function App() {
     }
   }, [bumpRefresh, addToast])
 
+  // Audit stream, used here only to show the agent's moves inline while a run
+  // is in flight (the Audit Console keeps its own full-history connection).
+  useEffect(() => {
+    let mounted = true
+    let ws = null
+    let reconnectTimer = null
+
+    function connect() {
+      if (!mounted) return
+      try {
+        ws = new WebSocket(wsURL('/ws/audit'))
+      } catch {
+        scheduleReconnect()
+        return
+      }
+      ws.onmessage = (event) => {
+        if (!mounted || !runningRef.current) return
+        let entry
+        try {
+          entry = JSON.parse(event.data)
+        } catch {
+          return
+        }
+        setAgentRun((s) => {
+          if (!s.running) return s
+          const events = s.events.filter((e) => e.id !== entry.id)
+          return { ...s, events: [...events, entry].slice(-40) }
+        })
+      }
+      ws.onclose = () => {
+        if (mounted) scheduleReconnect()
+      }
+      ws.onerror = () => ws?.close()
+    }
+
+    function scheduleReconnect() {
+      if (reconnectTimer) return
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null
+        connect()
+      }, 2000)
+    }
+
+    connect()
+    return () => {
+      mounted = false
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      ws?.close()
+    }
+  }, [])
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 text-[13px]">
       <Sidebar
@@ -138,7 +220,15 @@ export default function App() {
             <LiveFeedback incomingReview={incomingReview} reviewsConnected={reviewsConnected} />
           )}
           {view === 'revenue' && <RevenueIntelligence refresh={refresh} />}
-          {view === 'action' && <ActionCenter refresh={refresh} bumpRefresh={bumpRefresh} />}
+          {view === 'action' && (
+            <ActionCenter
+              refresh={refresh}
+              bumpRefresh={bumpRefresh}
+              agentRun={agentRun}
+              onAgentMessage={setAgentMessage}
+              onRunAgent={runAgent}
+            />
+          )}
           {view === 'audit' && <AuditConsole refresh={refresh} />}
         </div>
       </main>

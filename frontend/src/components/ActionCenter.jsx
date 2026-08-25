@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { get, post, formatINR, formatDate } from '../api'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { get, post, formatINR, formatDate, formatTime } from '../api'
 import Badge from './shared/Badge'
 import Spinner from './shared/Spinner'
 
@@ -22,12 +22,77 @@ function renderInline(text, keyPrefix) {
   )
 }
 
+function MarkdownTable({ rows, keyPrefix }) {
+  const [header, ...body] = rows
+  const cells = (row) =>
+    row
+      .trim()
+      .replace(/^\||\|$/g, '')
+      .split('|')
+      .map((c) => c.trim())
+  return (
+    <div className="my-2 overflow-x-auto">
+      <table className="w-full text-xs border border-slate-800 rounded-lg overflow-hidden">
+        <thead className="bg-slate-950/60">
+          <tr>
+            {cells(header).map((c, i) => (
+              <th
+                key={`${keyPrefix}-h-${i}`}
+                className="text-left font-semibold text-slate-300 px-3 py-1.5 border-b border-slate-800"
+              >
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((row, r) => (
+            <tr key={`${keyPrefix}-r-${r}`} className="border-b border-slate-800/60 last:border-0">
+              {cells(row).map((c, i) => (
+                <td key={`${keyPrefix}-c-${r}-${i}`} className="px-3 py-1.5 text-slate-300">
+                  {renderInline(c, `${keyPrefix}-${r}-${i}`)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function AgentText({ text }) {
   if (!text) return null
-  const lines = text.split('\n')
+  const rawLines = text.split('\n')
+
+  // Group consecutive markdown table rows so they render as a real table.
+  const blocks = []
+  for (let i = 0; i < rawLines.length; i++) {
+    const line = rawLines[i]
+    if (line.trim().startsWith('|') && line.includes('|', 1)) {
+      const rows = []
+      while (i < rawLines.length && rawLines[i].trim().startsWith('|')) {
+        const row = rawLines[i]
+        // skip the |---|---| separator row
+        if (!/^\|[\s:-]+\|?$/.test(row.trim().replace(/\|/g, '|'))) {
+          if (!/^[|\s:-]+$/.test(row.trim())) rows.push(row)
+        }
+        i++
+      }
+      i--
+      if (rows.length) blocks.push({ type: 'table', rows })
+      continue
+    }
+    blocks.push({ type: 'line', line })
+  }
+
   return (
     <div className="space-y-1">
-      {lines.map((line, i) => {
+      {blocks.map((block, i) => {
+        if (block.type === 'table') {
+          return <MarkdownTable key={`t-${i}`} rows={block.rows} keyPrefix={`t-${i}`} />
+        }
+        const line = block.line
         const trimmed = line.trim()
         if (trimmed.startsWith('## ')) {
           return (
@@ -144,11 +209,8 @@ function ApprovalCard({ approval, onDecided }) {
   )
 }
 
-export default function ActionCenter({ refresh, bumpRefresh }) {
-  const [message, setMessage] = useState('')
-  const [running, setRunning] = useState(false)
-  const [agentResult, setAgentResult] = useState(null)
-  const [agentError, setAgentError] = useState(null)
+export default function ActionCenter({ refresh, agentRun, onAgentMessage, onRunAgent }) {
+  const { message, running, result: agentResult, error: agentError, events } = agentRun
 
   const [approvals, setApprovals] = useState([])
   const [approvalsLoading, setApprovalsLoading] = useState(true)
@@ -188,20 +250,25 @@ export default function ActionCenter({ refresh, bumpRefresh }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refresh])
 
-  const runAgent = () => {
-    if (!message.trim() || running) return
-    setRunning(true)
-    setAgentError(null)
-    setAgentResult(null)
-    post('/api/agent/run', { message })
-      .then((res) => {
-        setAgentResult(res)
-        loadApprovals()
-        bumpRefresh?.()
-      })
-      .catch((e) => setAgentError(e.message))
-      .finally(() => setRunning(false))
-  }
+  const runAgent = () => onRunAgent(message)
+
+  const impact = useMemo(() => {
+    const targeted = campaigns.reduce((n, c) => n + (c.targeted || 0), 0)
+    const redeemed = campaigns.reduce((n, c) => n + (c.redeemed || 0), 0)
+    const revenue = campaigns.reduce((n, c) => n + (c.revenue_attributed_inr || 0), 0)
+    // Cost = incentive actually given away on redemptions, not budget reserved.
+    const cost = campaigns.reduce((n, c) => n + (c.incentive_spent_inr || 0), 0)
+    const reserved = campaigns.reduce((n, c) => n + (c.incentive_budget_inr || 0), 0)
+    return {
+      targeted,
+      redeemed,
+      revenue,
+      cost,
+      reserved,
+      net: revenue - cost,
+      redemptionRate: targeted ? Math.round((redeemed / targeted) * 100) : null,
+    }
+  }, [campaigns])
 
   return (
     <div className="space-y-8">
@@ -209,7 +276,7 @@ export default function ActionCenter({ refresh, bumpRefresh }) {
         <h3 className="text-sm font-semibold tracking-tight mb-3">Ask the growth agent</h3>
         <textarea
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => onAgentMessage(e.target.value)}
           placeholder="e.g. Which customers should we win back this week, and why?"
           rows={3}
           className="w-full bg-slate-950/60 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-400/50 resize-none"
@@ -224,15 +291,48 @@ export default function ActionCenter({ refresh, bumpRefresh }) {
             Run agent
           </button>
           {running && (
-            <span className="text-xs text-slate-400">Agent working — watch the audit console&hellip;</span>
+            <span className="text-xs text-slate-400">
+              Agent working&hellip; its answer appears here when done (usually 10–60s)
+            </span>
           )}
         </div>
+
+        {running && (
+          <div className="mt-4 border-t border-slate-800 pt-3">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-2">
+              Live agent moves
+            </p>
+            {events.length === 0 ? (
+              <p className="text-xs text-slate-500">Thinking&hellip;</p>
+            ) : (
+              <div className="space-y-1 font-mono text-[11px]">
+                {events.map((e) => (
+                  <div key={e.id} className="flex items-center gap-2">
+                    <span className="text-slate-500">{formatTime(e.ts)}</span>
+                    <span className="text-slate-300">{e.tool}</span>
+                    <Badge tone={VERDICT_TONE[e.policy_verdict] || 'slate'}>
+                      {e.policy_verdict}
+                    </Badge>
+                    {e.policy_rule_hit && (
+                      <span className="text-slate-500 truncate">{e.policy_rule_hit}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {agentError && <p className="mt-3 text-xs text-rose-400">{agentError}</p>}
 
         {agentResult && (
           <div className="mt-4 border-t border-slate-800 pt-4">
-            <AgentText text={agentResult.text} />
+            <AgentText
+              text={
+                agentResult.text?.trim() ||
+                'The agent finished without a text summary — its tool calls are below, and the full chain is in the Audit Console.'
+              }
+            />
             {agentResult.tool_events?.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {agentResult.tool_events.map((ev, i) => (
@@ -267,6 +367,48 @@ export default function ActionCenter({ refresh, bumpRefresh }) {
 
       <section>
         <h3 className="text-sm font-semibold tracking-tight text-slate-200 mb-3">Campaigns &amp; results</h3>
+
+        <div className="grid grid-cols-4 gap-4 mb-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Customers targeted</p>
+            <p className="mt-1 text-xl font-semibold text-slate-100">{impact.targeted}</p>
+            <p className="text-[11px] text-slate-500">{impact.redeemed} redeemed</p>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Revenue attributed</p>
+            <p className="mt-1 text-xl font-semibold text-emerald-400">
+              {formatINR(impact.revenue)}
+            </p>
+            <p className="text-[11px] text-slate-500">via unique campaign links</p>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Incentive cost</p>
+            <p className="mt-1 text-xl font-semibold text-amber-400">{formatINR(impact.cost)}</p>
+            <p className="text-[11px] text-slate-500">
+              paid on redemptions · {formatINR(impact.reserved)} reserved
+            </p>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Net revenue added</p>
+            <p
+              className={`mt-1 text-xl font-semibold ${
+                impact.net >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              {formatINR(impact.net)}
+            </p>
+            <p className="text-[11px] text-slate-500">
+              {impact.redemptionRate == null
+                ? 'no redemptions yet'
+                : `${impact.redemptionRate}% redemption rate`}
+            </p>
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-500 mb-3">
+          Exact attribution: each campaign issues one unique Razorpay link and offer code per
+          customer, so every rupee above came through a specific campaign — measured, not estimated.
+        </p>
+
         {campaignsLoading ? (
           <div className="flex items-center gap-2 text-slate-400 text-xs">
             <Spinner /> Loading campaigns…

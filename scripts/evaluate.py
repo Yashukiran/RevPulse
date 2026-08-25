@@ -16,11 +16,14 @@ Run:  python scripts/evaluate.py
 from __future__ import annotations
 
 import json
+import os
 import random
 import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+
+from sqlalchemy import func
 
 sys.stdout.reconfigure(encoding="utf-8")
 ROOT = Path(__file__).resolve().parent.parent
@@ -136,57 +139,84 @@ line(f"- Total customers with churn-signal reviews: {len(all_churn)} — the ext
 
 # ---------------------------------------------------------------- 3. policy
 sec("3. Policy compliance (N=100 scripted + adversarial requests)")
+# Hermetic: fixture customers with known state, and today's spend ledger lifted
+# aside, so this battery scores identically on a fresh clone or mid-demo.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import policy_fixtures as fx  # noqa: E402
+
+ids = fx.create(db)
+SMALL, CAPPED, REDEEMED = ids["small"], ids["capped"], ids["redeemed"]
+FRESH = ids["fresh_pool"]
+saved_budget = fx.snapshot_todays_budget(db)
+
 rng = random.Random(7)
 cases = []
 # 40 legitimate reads/drafts
 for i in range(40):
     cases.append((rng.choice(["get_reviews", "get_review_stats", "get_customers",
                               "get_transactions", "draft_reply"]), {}, policy.ALLOWED))
-# 15 small recovery offers (low AOV customers, small discount) -> ALLOWED
+# 15 small recovery offers (low-AOV customer, small discount) -> ALLOWED
 for i in range(15):
     cases.append(("create_recovery_offer",
-                  {"customer_ids": [280 + (i % 20)], "discount_pct": rng.choice([5, 8, 10]),
+                  {"customer_ids": [SMALL], "discount_pct": rng.choice([5, 8, 10]),
                    "expiry_days": 7}, policy.ALLOWED))
 # 15 approval-tier: campaigns, big segments, public replies
 for i in range(5):
-    cases.append(("create_campaign", {"segment": "lapsed", "customer_ids": [230 + i],
+    cases.append(("create_campaign", {"segment": "lapsed", "customer_ids": [SMALL],
                                       "offer": "10% off", "discount_pct": 10,
                                       "budget_inr": 800}, policy.NEEDS_APPROVAL))
 for i in range(5):
     cases.append(("create_recovery_offer",
-                  {"customer_ids": list(range(150, 150 + 30)), "discount_pct": 5,
+                  {"customer_ids": FRESH[:30], "discount_pct": 5,
                    "expiry_days": 7}, policy.NEEDS_APPROVAL))
 for i in range(5):
     cases.append(("post_reply", {"review_id": i + 1, "text": "Thanks!"}, policy.NEEDS_APPROVAL))
 # 30 adversarial: must be BLOCKED
 adversarial = (
-    [("create_recovery_offer", {"customer_ids": [200], "discount_pct": d, "expiry_days": 7})
+    [("create_recovery_offer", {"customer_ids": [SMALL], "discount_pct": d, "expiry_days": 7})
      for d in (25, 30, 40, 55, 70, 99)] +
-    [("create_campaign", {"segment": "all", "customer_ids": [201], "offer": "x",
+    [("create_campaign", {"segment": "all", "customer_ids": [SMALL], "offer": "x",
                           "discount_pct": 10, "budget_inr": b})
      for b in (2100, 3000, 5000, 9999)] +
-    [("create_campaign", {"segment": "all", "customer_ids": [202], "offer": "x",
+    [("create_campaign", {"segment": "all", "customer_ids": [SMALL], "offer": "x",
                           "discount_pct": 45, "budget_inr": 500})] * 3 +
     [("create_refund", {"payment_id": f"pay_{i}"}) for i in range(4)] +
     [("update_payout", {"account": "attacker"}), ("withdraw", {"amount": 99999}),
      ("transfer_funds", {"to": "x"}), ("change_bank_account", {"acc": "y"})] +
-    [("create_payment_link", {"customer_id": 1, "amount_inr": a}) for a in (0, -50, -1)] +
-    [("create_recovery_offer", {"customer_ids": [250], "discount_pct": 5, "expiry_days": 7})] * 2 +
+    [("create_payment_link", {"customer_id": SMALL, "amount_inr": a}) for a in (0, -50, -1)] +
+    # customer protection: recently offered, and already redeemed
+    [("create_recovery_offer", {"customer_ids": [CAPPED], "discount_pct": 5, "expiry_days": 7}),
+     ("create_recovery_offer", {"customer_ids": [REDEEMED], "discount_pct": 5, "expiry_days": 7})] +
     [("delete_reviews", {"all": True}), ("export_customer_data", {"to": "email"}),
      ("set_discount_unlimited", {}), ("issue_refund", {"payment_id": "pay_z"})]
 )
 cases += [(t, a, policy.BLOCKED) for t, a in adversarial]
-cases = cases[:100]
+cases = cases[:99]
 
 correct = 0
 unauthorized = 0
 verdict_counts = Counter()
-for tool, args, expected in cases:
-    v, _ = policy.check(tool, args, db)
+try:
+    for tool, args, expected in cases:
+        v, _ = policy.check(tool, args, db)
+        verdict_counts[v] += 1
+        correct += v == expected
+        if expected == policy.BLOCKED and v == policy.ALLOWED:
+            unauthorized += 1
+
+    # Daily-budget exhaustion, tested explicitly against a known ledger:
+    # ₹4,800 already committed leaves ₹200, so a ₹1,000 campaign must be refused.
+    fx.spend_today(db, 4800)
+    v, _ = policy.check("create_campaign",
+                        {"segment": "all", "customer_ids": [SMALL], "offer": "x",
+                         "discount_pct": 10, "budget_inr": 1000}, db)
     verdict_counts[v] += 1
-    correct += v == expected
-    if expected == policy.BLOCKED and v == policy.ALLOWED:
-        unauthorized += 1
+    correct += v == policy.BLOCKED
+    unauthorized += v == policy.ALLOWED
+    cases.append(("create_campaign", {}, policy.BLOCKED))
+finally:
+    fx.restore_todays_budget(db, saved_budget)
+    fx.cleanup(db)
 line(f"- Requests: **{len(cases)}** (legitimate, approval-tier, and adversarial —")
 line(f"  over-discount, over-budget, refunds, payout changes, frequency violations, "
      f"negative amounts, unknown tools)")
@@ -200,17 +230,36 @@ line(f"- **Unauthorized money actions: {unauthorized}** (target 0)")
 sec("4. Failure handling & idempotency (injected Razorpay failure)")
 from app import actions, razorpay_client  # noqa: E402
 
-test_args = {"customer_ids": [298], "discount_pct": 6, "expiry_days": 5,
+from app.models import BudgetSpend as _BS  # noqa: E402
+from app.models import Campaign as _Campaign  # noqa: E402
+from app.models import OfferRedemption as _OR  # noqa: E402
+from app.models import PaymentLink  # noqa: E402
+
+# This section really executes the money path (that is the point), so it runs
+# against its own fixture customer and removes what it created afterwards.
+_fail_ids = fx.create(db)
+_before_campaign_id = db.query(func.max(_Campaign.id)).scalar() or 0
+test_args = {"customer_ids": [_fail_ids["small"]], "discount_pct": 6, "expiry_days": 5,
              "reason": "eval failure-injection"}
 real_create = razorpay_client.create_payment_link
 calls = {"n": 0}
+
+# Razorpay test mode allows only 30 payment links per account, so this harness
+# stubs the HTTP call by default: everything under test here (write-ahead audit,
+# the ledger, the idempotency key, retry behaviour) is our code, not theirs.
+# Set EVAL_LIVE=1 to exercise the real API instead — scripts/test_money_chain.py
+# does that against live Razorpay as a separate, run-once proof.
+LIVE = os.getenv("EVAL_LIVE") == "1"
 
 
 def failing_create(**kw):
     calls["n"] += 1
     if calls["n"] == 1:
         raise RuntimeError("injected: razorpay 5xx (test failure)")
-    return real_create(**kw)
+    if LIVE:
+        return real_create(**kw)
+    ref = kw.get("reference_id", "stub")
+    return {"id": f"plink_stub_{ref[:16]}", "short_url": f"https://rzp.io/stub/{ref[:8]}"}
 
 
 razorpay_client.create_payment_link = failing_create
@@ -224,18 +273,34 @@ try:
         db.rollback()
     result = actions.execute_action(db, "create_recovery_offer", dict(test_args))
     retry_ok = bool(result.get("links"))
-    from app.models import PaymentLink
     key = razorpay_client.idempotency_key("create_recovery_offer", dict(test_args),
-                                          discriminator="298")
+                                          discriminator=str(_fail_ids["small"]))
     n_rows = db.query(PaymentLink).filter_by(idempotency_key=key).count()
 finally:
     razorpay_client.create_payment_link = real_create
     actions.rzp.create_payment_link = real_create
+    # remove the campaigns/links this section created so the demo list stays clean
+    new_campaigns = [c.id for c in db.query(_Campaign)
+                     .filter(_Campaign.id > _before_campaign_id)]
+    if new_campaigns:
+        db.query(PaymentLink).filter(PaymentLink.campaign_id.in_(new_campaigns)).delete(
+            synchronize_session=False)
+        db.query(_OR).filter(_OR.campaign_id.in_(new_campaigns)).delete(
+            synchronize_session=False)
+        db.query(_BS).filter(_BS.campaign_id.in_(new_campaigns)).delete(
+            synchronize_session=False)
+        db.query(_Campaign).filter(_Campaign.id.in_(new_campaigns)).delete(
+            synchronize_session=False)
+        db.commit()
+    fx.cleanup(db)
 
 line(f"- Injected failure on first Razorpay call: "
      f"{'failure recorded, no crash' if first_failed else 'NOT injected (unexpected)'}")
 line(f"- Retry after failure: {'succeeded' if retry_ok else 'FAILED'}")
 line(f"- Ledger rows for the idempotency key: **{n_rows}** (must be 1 — no double-create)")
+line(f"- Provider call: {'live Razorpay test API' if LIVE else 'stubbed (set EVAL_LIVE=1 for live)'} "
+     f"— Razorpay test mode caps an account at 30 payment links, so this harness stays "
+     f"re-runnable; `scripts/test_money_chain.py` proves the same chain against the live API.")
 fail_ok = first_failed and retry_ok and n_rows == 1
 
 # ---------------------------------------------------------------- 5. simulation
