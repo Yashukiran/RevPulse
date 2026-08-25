@@ -40,3 +40,26 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def ensure_columns() -> None:
+    """Add columns introduced after a database was first created.
+
+    The review extraction cached in this database was paid for, so the schema is
+    widened in place rather than recreated. SQLite only supports ADD COLUMN,
+    which is all these changes need.
+    """
+    from sqlalchemy import text
+
+    wanted = {
+        "opportunities": [("recoverable_revenue_inr", "INTEGER DEFAULT 0")],
+        "campaigns": [("control_ids_json", "TEXT")],
+    }
+    with engine.begin() as conn:
+        for table, columns in wanted.items():
+            existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+            if not existing:
+                continue  # table not created yet; metadata.create_all will handle it
+            for name, ddl in columns:
+                if name not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))

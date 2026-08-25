@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from . import audit  # noqa: E402
-from .db import Base, engine  # noqa: E402
+from .db import Base, engine, ensure_columns  # noqa: E402
 from .routers.actions_api import router as actions_router  # noqa: E402
 from .routers.api import router as api_router  # noqa: E402
 from .routers.opportunities_api import router as opportunities_router  # noqa: E402
@@ -25,6 +25,7 @@ app.add_middleware(
 )
 
 Base.metadata.create_all(engine)
+ensure_columns()
 app.include_router(api_router)
 app.include_router(actions_router)
 app.include_router(opportunities_router)

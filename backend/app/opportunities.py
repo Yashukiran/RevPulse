@@ -70,6 +70,33 @@ def _open_opportunity_customers(db) -> set[int]:
     return ids
 
 
+def compute_money(targets: list[dict]) -> dict:
+    """The money maths for a win-back proposal. Deterministic, from the
+    merchant's own transactions — the model never produces any of these.
+
+    Four figures, deliberately distinguished:
+      revenue_at_risk_inr    lifetime value already earned from these customers.
+                             CONTEXT for how much the relationship is worth. It
+                             is not money this offer can recover.
+      recoverable_revenue_inr what ONE returning order from each is worth at the
+                             discounted price — the honest upper bound of what
+                             this specific intervention can bring back.
+      expected_revenue_inr   a projection: recoverable x an assumed redemption
+                             rate, always shown with the assumption stated.
+      max_exposure_inr       exact worst case: the incentive given away if every
+                             targeted customer redeems.
+    """
+    discounted = [int(round(t["aov_inr"] * (1 - WINBACK_DISCOUNT_PCT / 100))) for t in targets]
+    incentive = [t["aov_inr"] - d for t, d in zip(targets, discounted)]
+    recoverable = sum(discounted)
+    return {
+        "revenue_at_risk_inr": sum(t["ltv_inr"] for t in targets),
+        "recoverable_revenue_inr": recoverable,
+        "expected_revenue_inr": int(round(recoverable * ASSUMED_REDEMPTION_RATE)),
+        "max_exposure_inr": sum(incentive),
+    }
+
+
 def detect_churn_risk(db, ignore_open: bool = False,
                       stats: dict | None = None) -> dict | None:
     """Find high-value customers whose own words say they are leaving.
@@ -145,21 +172,15 @@ def detect_churn_risk(db, ignore_open: bool = False,
     candidates.sort(key=lambda c: -c["ltv_inr"])
     targets = candidates[:MAX_SEGMENT]
 
-    # ---- money maths: deterministic, from this merchant's own transactions ----
-    revenue_at_risk = sum(c["ltv_inr"] for c in targets)
-    # what each customer would pay on a discounted order
-    discounted = [int(round(c["aov_inr"] * (1 - WINBACK_DISCOUNT_PCT / 100))) for c in targets]
-    # incentive given away per customer if they redeem
-    incentive = [c["aov_inr"] - d for c, d in zip(targets, discounted)]
-    max_exposure = sum(incentive)                       # exact worst case: all redeem
-    expected_revenue = int(round(sum(discounted) * ASSUMED_REDEMPTION_RATE))
+    money = compute_money(targets)
 
     return {
         "kind": "churn_risk_winback",
         "targets": targets,
-        "revenue_at_risk_inr": revenue_at_risk,
-        "expected_revenue_inr": expected_revenue,
-        "max_exposure_inr": max_exposure,
+        "revenue_at_risk_inr": money["revenue_at_risk_inr"],
+        "recoverable_revenue_inr": money["recoverable_revenue_inr"],
+        "expected_revenue_inr": money["expected_revenue_inr"],
+        "max_exposure_inr": money["max_exposure_inr"],
         "excluded_by_policy": excluded_by_policy,
         "proposed_tool": "create_recovery_offer",
         "proposed_args": {
@@ -285,6 +306,7 @@ def scan(db, actor: str = "agent", stats: dict | None = None) -> list[Opportunit
         }),
         customer_ids_json=json.dumps(candidate["proposed_args"]["customer_ids"]),
         revenue_at_risk_inr=candidate["revenue_at_risk_inr"],
+        recoverable_revenue_inr=candidate["recoverable_revenue_inr"],
         expected_revenue_inr=candidate["expected_revenue_inr"],
         max_exposure_inr=candidate["max_exposure_inr"],
         assumed_redemption_rate=ASSUMED_REDEMPTION_RATE,
@@ -335,6 +357,7 @@ def serialize(opp: Opportunity, db=None) -> dict:
         "evidence": json.loads(opp.evidence_json),
         "customer_ids": json.loads(opp.customer_ids_json),
         "revenue_at_risk_inr": opp.revenue_at_risk_inr,
+        "recoverable_revenue_inr": opp.recoverable_revenue_inr or 0,
         "expected_revenue_inr": opp.expected_revenue_inr,
         "max_exposure_inr": opp.max_exposure_inr,
         "assumed_redemption_rate": opp.assumed_redemption_rate,

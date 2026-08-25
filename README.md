@@ -9,7 +9,8 @@ The agent is the product, not a chatbot bolted onto a dashboard. Nobody asks it 
 ```
 churn-risk detection      a high-value customer's own review says they are leaving
         ↓
-opportunity               evidence + revenue at risk + expected return + MAXIMUM EXPOSURE
+opportunity               evidence + lifetime value at risk + realistically recoverable
+                          + expected return + MAXIMUM EXPOSURE
         ↓
 policy engine             deterministic bounds; agent-initiated proposals always escalate
         ↓
@@ -27,7 +28,7 @@ One command proves the whole chain, repeatably: `python scripts/test_agent_loop.
 Two rules make this defensible rather than a demo trick:
 
 1. **Every rupee figure is computed in Python from the merchant's own data.** The model writes the explanation and never the arithmetic, so it cannot invent a number.
-2. **Maximum financial exposure is exact, and it is shown next to the projection.** Expected revenue is a projection with its assumption printed beside it; worst-case cost is not a projection at all.
+2. **The four money figures are kept distinct, and none of them oversells.** Lifetime value at risk is what these customers have already spent — context for how much the relationship is worth, not money the offer can recover. Realistically recoverable is what one returning order from each is worth. Expected recovered is a projection with its assumption printed beside it. Maximum exposure is exact: what the offer costs if every customer redeems.
 
 Built for the Razorpay AI Buildathon, Track 01 (AI Growth & Agentic Commerce). Demo merchant: *Biryani House*, a fictional Bengaluru delivery restaurant.
 

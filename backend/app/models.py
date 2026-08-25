@@ -100,6 +100,8 @@ class Campaign(Base):
     budget_inr: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), default="active")  # active/completed/cancelled
     customer_ids_json: Mapped[str] = mapped_column(Text)  # targeted customer ids
+    # customers deliberately withheld from the offer, to measure incrementality
+    control_ids_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class PaymentLink(Base):
@@ -184,6 +186,9 @@ class Opportunity(Base):
 
     # money maths — computed in Python, never by the model
     revenue_at_risk_inr: Mapped[int] = mapped_column(Integer, default=0)
+    # what ONE returning order from each targeted customer is worth — the honest
+    # upper bound of what this intervention can actually recover
+    recoverable_revenue_inr: Mapped[int] = mapped_column(Integer, default=0)
     expected_revenue_inr: Mapped[int] = mapped_column(Integer, default=0)
     max_exposure_inr: Mapped[int] = mapped_column(Integer, default=0)
     assumed_redemption_rate: Mapped[float] = mapped_column(Float, default=0.0)

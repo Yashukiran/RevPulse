@@ -178,17 +178,28 @@ export default function OpportunityCard({ opportunity, onDecided, compact = fals
         {opp.rationale}
       </p>
 
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        <MoneyBox label="Revenue at risk" value={formatINR(opp.revenue_at_risk_inr)} accent="text-slate-100" />
+      <div className="mt-3 grid grid-cols-4 gap-3">
         <MoneyBox
-          label="Expected recovered revenue"
-          sub="if 30% redeem — projection"
+          label="Lifetime value at risk"
+          sub="already earned — context, not recoverable"
+          value={formatINR(opp.revenue_at_risk_inr)}
+          accent="text-slate-100"
+        />
+        <MoneyBox
+          label="Realistically recoverable"
+          sub="one returning order each"
+          value={formatINR(opp.recoverable_revenue_inr)}
+          accent="text-sky-400"
+        />
+        <MoneyBox
+          label="Expected recovered"
+          sub={`if ${Math.round((opp.assumed_redemption_rate || 0.3) * 100)}% redeem — projection`}
           value={formatINR(opp.expected_revenue_inr)}
           accent="text-emerald-400"
         />
         <MoneyBox
           label="Maximum exposure"
-          sub="worst case, if everyone redeems"
+          sub="exact worst case, if everyone redeems"
           value={formatINR(opp.max_exposure_inr)}
           accent="text-amber-400"
         />
