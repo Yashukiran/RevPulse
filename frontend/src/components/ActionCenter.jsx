@@ -224,6 +224,7 @@ export default function ActionCenter({ refresh, agentRun, onAgentMessage, onRunA
   const [opportunities, setOpportunities] = useState([])
   const [opportunitiesLoading, setOpportunitiesLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
+  const [scanMessage, setScanMessage] = useState(null)
   const opportunitiesFirstLoad = useRef(true)
 
   const loadOpportunities = () => {
@@ -246,9 +247,19 @@ export default function ActionCenter({ refresh, agentRun, onAgentMessage, onRunA
 
   const scanNow = () => {
     setScanning(true)
+    setScanMessage(null)
     post('/api/opportunities/scan')
-      .then(() => loadOpportunities())
-      .catch(() => {})
+      .then((res) => {
+        loadOpportunities()
+        // A scan that finds nothing still reports why, so the button never
+        // looks broken when the guardrails are simply holding.
+        setScanMessage(
+          res.found > 0
+            ? { tone: 'emerald', text: `Found ${res.found} new opportunity.` }
+            : { tone: 'slate', text: res.reason || 'Scan complete — no new opportunities.' }
+        )
+      })
+      .catch((e) => setScanMessage({ tone: 'rose', text: `Scan failed: ${e.message}` }))
       .finally(() => setScanning(false))
   }
 
@@ -322,6 +333,19 @@ export default function ActionCenter({ refresh, agentRun, onAgentMessage, onRunA
             Scan now
           </button>
         </div>
+        {scanMessage && (
+          <p
+            className={`mb-3 text-xs ${
+              scanMessage.tone === 'emerald'
+                ? 'text-emerald-400'
+                : scanMessage.tone === 'rose'
+                  ? 'text-rose-400'
+                  : 'text-slate-400'
+            }`}
+          >
+            {scanMessage.text}
+          </p>
+        )}
         {opportunitiesLoading ? (
           <div className="flex items-center gap-2 text-slate-400 text-xs">
             <Spinner /> Loading opportunities…

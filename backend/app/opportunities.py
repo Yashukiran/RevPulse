@@ -70,7 +70,8 @@ def _open_opportunity_customers(db) -> set[int]:
     return ids
 
 
-def detect_churn_risk(db, ignore_open: bool = False) -> dict | None:
+def detect_churn_risk(db, ignore_open: bool = False,
+                      stats: dict | None = None) -> dict | None:
     """Find high-value customers whose own words say they are leaving.
 
     Signal = a churn-flagged review from a customer whose lifetime spend is
@@ -98,13 +99,19 @@ def detect_churn_risk(db, ignore_open: bool = False) -> dict | None:
     candidates: list[dict] = []
     seen: set[int] = set()
     excluded_by_policy = 0
+    excluded_covered = 0
+    high_value_matches = 0
     for r in churn_reviews:
         cid = r.customer_id
-        if cid in seen or cid in already_covered:
+        if cid in seen:
             continue
         if int(ltv.get(cid, 0)) < CHURN_MIN_LTV_INR:
             continue
         seen.add(cid)
+        high_value_matches += 1
+        if cid in already_covered:
+            excluded_covered += 1
+            continue
         if cid in blocked:
             excluded_by_policy += 1
             continue
@@ -120,6 +127,16 @@ def detect_churn_risk(db, ignore_open: bool = False) -> dict | None:
             "last_order": last_order[cid].isoformat() if cid in last_order else None,
             "review": {"id": r.id, "ts": r.ts.isoformat(), "rating": r.rating,
                        "text": r.text, "themes": json.loads(r.themes_json or "[]")},
+        })
+
+    if stats is not None:
+        stats.update({
+            "churn_reviews_in_window": len(churn_reviews),
+            "high_value_matches": high_value_matches,
+            "excluded_recent_offer": excluded_by_policy,
+            "excluded_already_proposed": excluded_covered,
+            "min_ltv_inr": CHURN_MIN_LTV_INR,
+            "lookback_days": CHURN_LOOKBACK_DAYS,
         })
 
     if not candidates:
@@ -206,7 +223,29 @@ def _explain(candidate: dict) -> str:
         return fallback
 
 
-def scan(db, actor: str = "agent") -> list[Opportunity]:
+def explain_no_result(stats: dict) -> str:
+    """Say why a scan came back empty, so 'nothing found' is never mistaken
+    for 'nothing happened'."""
+    if not stats or not stats.get("churn_reviews_in_window"):
+        return ("No churn-signal reviews in the last "
+                f"{stats.get('lookback_days', CHURN_LOOKBACK_DAYS)} days — nothing to act on.")
+    if not stats.get("high_value_matches"):
+        return (f"{stats['churn_reviews_in_window']} churn-signal review(s) found, but none "
+                f"from a customer above the ₹{stats.get('min_ltv_inr', CHURN_MIN_LTV_INR):,} "
+                f"lifetime-value line, so a win-back offer would not pay for itself.")
+    parts = []
+    if stats.get("excluded_recent_offer"):
+        parts.append(f"{stats['excluded_recent_offer']} already received an offer in the last "
+                     f"{policy.OFFER_FREQUENCY_DAYS} days (frequency cap)")
+    if stats.get("excluded_already_proposed"):
+        parts.append(f"{stats['excluded_already_proposed']} are already covered by a live "
+                     f"proposal or campaign")
+    detail = "; ".join(parts) if parts else "all were filtered by the guardrails"
+    return (f"{stats['high_value_matches']} high-value customer(s) matched the churn signal, "
+            f"but {detail}. The guardrails are holding — nothing new to approve.")
+
+
+def scan(db, actor: str = "agent", stats: dict | None = None) -> list[Opportunity]:
     """Run a full opportunity scan. Everything it does is audited."""
     entry = audit.write_ahead(db, actor=actor, tool="scan_opportunities",
                               args={"scenario": "churn_risk_winback"},
@@ -214,7 +253,7 @@ def scan(db, actor: str = "agent") -> list[Opportunity]:
                                         "signals for revenue opportunities.",
                               verdict=policy.ALLOWED, rule=None)
     try:
-        candidate = detect_churn_risk(db)
+        candidate = detect_churn_risk(db, stats=stats)
     except Exception as e:
         audit.complete(db, entry, status="failed", error=str(e))
         raise

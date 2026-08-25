@@ -37,10 +37,19 @@ def list_opportunities(status: str | None = None, limit: int = 20,
 
 @router.post("/scan")
 def run_scan(db: Session = Depends(get_db)):
-    """Ask the agent to look for opportunities now."""
-    found = opportunities.scan(db)
-    return {"found": len(found),
-            "opportunities": [opportunities.serialize(o, db) for o in found]}
+    """Ask the agent to look for opportunities now.
+
+    Always explains itself: an empty scan reports why, so "found nothing" is
+    never mistaken for "did nothing".
+    """
+    stats: dict = {}
+    found = opportunities.scan(db, stats=stats)
+    return {
+        "found": len(found),
+        "opportunities": [opportunities.serialize(o, db) for o in found],
+        "reason": None if found else opportunities.explain_no_result(stats),
+        "stats": stats,
+    }
 
 
 @router.get("/{opportunity_id}")

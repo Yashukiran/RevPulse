@@ -44,6 +44,7 @@ export default function Overview({ refresh, live }) {
   const [opportunities, setOpportunities] = useState([])
   const [oppLoading, setOppLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
+  const [scanMessage, setScanMessage] = useState(null)
   const oppFirstLoad = useRef(true)
 
   const loadOpportunities = () => {
@@ -59,9 +60,19 @@ export default function Overview({ refresh, live }) {
 
   const scanNow = () => {
     setScanning(true)
+    setScanMessage(null)
     post('/api/opportunities/scan')
-      .then(() => loadOpportunities())
-      .catch(() => {})
+      .then((res) => {
+        loadOpportunities()
+        // A scan that finds nothing still reports why, so the button never
+        // looks broken when the guardrails are simply holding.
+        setScanMessage(
+          res.found > 0
+            ? { tone: 'emerald', text: `Found ${res.found} new opportunity.` }
+            : { tone: 'slate', text: res.reason || 'Scan complete — no new opportunities.' }
+        )
+      })
+      .catch((e) => setScanMessage({ tone: 'rose', text: `Scan failed: ${e.message}` }))
       .finally(() => setScanning(false))
   }
 
@@ -201,6 +212,20 @@ export default function Overview({ refresh, live }) {
             Scan now
           </button>
         </div>
+
+        {scanMessage && (
+          <p
+            className={`mt-2 text-xs ${
+              scanMessage.tone === 'emerald'
+                ? 'text-emerald-400'
+                : scanMessage.tone === 'rose'
+                  ? 'text-rose-400'
+                  : 'text-slate-400'
+            }`}
+          >
+            {scanMessage.text}
+          </p>
+        )}
 
         <div className="mt-3">
           {oppLoading ? (
