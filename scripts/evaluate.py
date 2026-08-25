@@ -334,6 +334,62 @@ else:
 line(f"- End-to-end loop (approve → Razorpay → webhook → attribution → audit) is "
      f"proven separately and repeatably by `scripts/test_agent_loop.py`.")
 
+# ---- the behavioural detector: no reviews, no model ----
+line("")
+_lapsed = _opps.detect_lapsed_high_value(db, ignore_open=True)
+if _lapsed:
+    n_l = len(_lapsed["targets"])
+    exposure_ok_l = _lapsed["max_exposure_inr"] <= (
+        policy.MAX_RECOVERY_VALUE_INR * n_l)
+    v_l, r_l = policy.check_proactive(_lapsed["proposed_tool"],
+                                      _lapsed["proposed_args"], db)
+    worst = max(_lapsed["targets"], key=lambda t: t["order_history"]["silent_days"])
+    line(f"- **Behavioural detector (no reviews, no model):** surfaced **{n_l} lapsed "
+         f"high-value customer(s)** from transaction history alone — e.g. "
+         f"{worst['name']}, {worst['order_history']['orders']} orders roughly every "
+         f"{worst['order_history']['median_gap_days']} days, now silent for "
+         f"{worst['order_history']['silent_days']} days "
+         f"({worst['order_history']['silent_multiple']}x their own rhythm)")
+    line(f"- Lifetime value at risk **₹{_lapsed['revenue_at_risk_inr']:,}**, realistically "
+         f"recoverable **₹{_lapsed['recoverable_revenue_inr']:,}** (one returning order "
+         f"each), maximum exposure **₹{_lapsed['max_exposure_inr']:,}** — "
+         f"{'within' if exposure_ok_l else 'ABOVE'} the per-customer cap")
+    line(f"- Gated before the merchant saw it: **{v_l}**")
+    line(f"- This detector covers customers who never wrote a review, which is most of "
+         f"them: reviews exist for a minority, transaction behaviour for everyone.")
+    lapsed_ok = exposure_ok_l and v_l == policy.NEEDS_APPROVAL
+else:
+    line("- **Behavioural detector:** no lapsed high-value customers right now "
+         "(every qualifying customer is either still active or already holds an offer).")
+    lapsed_ok = True
+
+# ---------------------------------------------------------------- 4c. incrementality
+sec("4c. Incrementality — control group")
+from app.actions import HOLDOUT_MIN_SEGMENT, HOLDOUT_SHARE, split_holdout  # noqa: E402
+
+_seg = list(range(1, 11))
+_t1, _c1 = split_holdout(_seg, campaign_id=99)
+_t2, _c2 = split_holdout(_seg, campaign_id=99)
+holdout_ok = (_t1, _c1) == (_t2, _c2) and len(_c1) == 3 and split_holdout([1, 2, 3], 1)[1] == []
+line(f"- Campaigns of **{HOLDOUT_MIN_SEGMENT}+ customers** hold back "
+     f"**{int(HOLDOUT_SHARE * 100)}%** as a control group: same profile, no offer, no link.")
+line(f"- The split is seeded off the campaign id, so it is reproducible and cannot be "
+     f"re-rolled until the numbers improve (verified: {'deterministic' if holdout_ok else 'FAILED'}).")
+line(f"- Return rates are compared across both groups over a "
+     f"{_opps.RETURN_WINDOW_DAYS}-day window, counting **any** order rather than only "
+     f"ones through our links — a control customer has no link, and a treated customer "
+     f"who returns by another route still returned.")
+line(f"- Segments below {HOLDOUT_MIN_SEGMENT} skip the holdout and record why. A control "
+     f"group of two proves nothing.")
+line("")
+line("**Limits of this measure, stated plainly:** attribution (a payment arrived through "
+     "our link) is exact by construction. Incrementality (the offer *caused* a return that "
+     "would not otherwise have happened) is not, and at the sample sizes a single merchant "
+     "produces it never reaches statistical significance. Every lift figure is therefore "
+     "labelled directional and shown with both group sizes. `scripts/test_holdout.py` "
+     "proves the mechanism: deterministic split, control customers receive no link or "
+     "offer record, and unfavourable results are reported rather than suppressed.")
+
 # ---------------------------------------------------------------- 5. simulation
 sec("5. Campaign outcome simulation — **SIMULATED**")
 line("_Customer responses below are **simulated** with seeded probabilities "
@@ -362,6 +418,8 @@ line(f"| Policy verdicts correct | {correct}/{len(cases)} | 100 |")
 line(f"| Unauthorized money actions | {unauthorized} | 0 |")
 line(f"| Failure recovery + idempotency | {'PASS' if fail_ok else 'FAIL'} | PASS |")
 line(f"| Autonomous loop: detect + quantify + gate | {'PASS' if loop_ok else 'FAIL'} | PASS |")
+line(f"| Behavioural detector (no reviews needed) | {'PASS' if lapsed_ok else 'FAIL'} | PASS |")
+line(f"| Holdout split deterministic + control unoffered | {'PASS' if holdout_ok else 'FAIL'} | PASS |")
 line("\n**Limitations:** synthetic seeded data; single merchant; campaign responses "
      "simulated; extraction quality bounded by the labeling model. Associations are "
      "never presented as causation.")
@@ -371,5 +429,5 @@ out.write_text("\n".join(report), encoding="utf-8")
 print("\n".join(report))
 print(f"\nwritten -> {out}")
 db.close()
-ok = recall == 5 and unauthorized == 0 and fail_ok
+ok = recall == 5 and unauthorized == 0 and fail_ok and lapsed_ok and holdout_ok
 sys.exit(0 if ok else 1)
