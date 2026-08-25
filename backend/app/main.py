@@ -9,6 +9,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from . import audit  # noqa: E402
 from .db import Base, engine  # noqa: E402
+from .routers.actions_api import router as actions_router  # noqa: E402
 from .routers.api import router as api_router  # noqa: E402
 
 app = FastAPI(title="RevPulse API", version="0.1.0")
@@ -24,6 +25,7 @@ app.add_middleware(
 
 Base.metadata.create_all(engine)
 app.include_router(api_router)
+app.include_router(actions_router)
 
 
 @app.on_event("startup")

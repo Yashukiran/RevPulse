@@ -12,9 +12,9 @@ import os
 
 import anthropic
 
-from .. import audit, policy
+from .. import actions, audit, policy
 from ..db import SessionLocal
-from .tools import TOOLS, execute_tool
+from .tools import ACTION_TOOLS, TOOLS, execute_tool
 
 AGENT_MODEL = "claude-sonnet-5"
 MAX_TURNS = 15
@@ -57,8 +57,14 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
                                           reasoning=reasoning, verdict=verdict, rule=rule)
                 if verdict == policy.ALLOWED:
                     try:
-                        result = execute_tool(call.name, call.input, db)
-                        audit.complete(db, entry, status="success")
+                        if call.name in ACTION_TOOLS:
+                            result = actions.execute_action(db, call.name, call.input)
+                            ref = (result.get("links") or [{}])[0].get("razorpay_link_id") \
+                                if isinstance(result, dict) else None
+                            audit.complete(db, entry, status="success", razorpay_ref=ref)
+                        else:
+                            result = execute_tool(call.name, call.input, db)
+                            audit.complete(db, entry, status="success")
                     except Exception as e:  # tool failure is data, not a crash
                         result = {"error": str(e)}
                         audit.complete(db, entry, status="failed", error=str(e))
