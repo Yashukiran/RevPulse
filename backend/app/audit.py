@@ -16,6 +16,7 @@ from .models import AuditLog
 # WebSocket subscribers (set by main.py); broadcast is best-effort and never
 # blocks or fails the audited action itself.
 _subscribers: set = set()
+_review_subscribers: set = set()
 _loop: asyncio.AbstractEventLoop | None = None
 
 
@@ -32,25 +33,41 @@ def unsubscribe(ws) -> None:
     _subscribers.discard(ws)
 
 
-def _broadcast(entry: AuditLog) -> None:
-    if not _subscribers or _loop is None:
+def subscribe_reviews(ws) -> None:
+    _review_subscribers.add(ws)
+
+
+def unsubscribe_reviews(ws) -> None:
+    _review_subscribers.discard(ws)
+
+
+def broadcast_review(payload: dict) -> None:
+    """Push a live-review event to dashboard subscribers (best-effort)."""
+    _send_to(_review_subscribers, json.dumps(payload, default=str))
+
+
+def _send_to(subscribers: set, payload: str) -> None:
+    if not subscribers or _loop is None:
         return
-    payload = json.dumps(serialize(entry), default=str)
 
     async def send_all():
         dead = []
-        for ws in list(_subscribers):
+        for ws in list(subscribers):
             try:
                 await ws.send_text(payload)
             except Exception:
                 dead.append(ws)
         for ws in dead:
-            _subscribers.discard(ws)
+            subscribers.discard(ws)
 
     try:
         asyncio.run_coroutine_threadsafe(send_all(), _loop)
     except Exception:
         pass
+
+
+def _broadcast(entry: AuditLog) -> None:
+    _send_to(_subscribers, json.dumps(serialize(entry), default=str))
 
 
 def serialize(e: AuditLog) -> dict:

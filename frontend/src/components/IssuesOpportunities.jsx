@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import { get, formatINR, formatDate, ISSUE_THEMES } from '../api'
 import Drawer from './shared/Drawer'
@@ -64,14 +64,20 @@ export default function IssuesOpportunities({ refresh }) {
   const [drawerLoading, setDrawerLoading] = useState(false)
 
   const [churnCustomers, setChurnCustomers] = useState(null)
+  const firstLoad = useRef(true)
 
   useEffect(() => {
-    setLoading(true)
+    // Only the very first load shows the full-page loader; background
+    // refetches triggered by a live review keep the existing data on screen.
+    if (firstLoad.current) setLoading(true)
     setError(null)
     get('/api/stats')
       .then(setStats)
       .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
+      .finally(() => {
+        setLoading(false)
+        firstLoad.current = false
+      })
     get('/api/customers?churn_signal=true&limit=60')
       .then(setChurnCustomers)
       .catch(() => setChurnCustomers(null))

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts'
 import { get, formatINR } from '../api'
 import Spinner from './shared/Spinner'
@@ -21,18 +21,29 @@ export default function RevenueIntelligence({ refresh }) {
   const [theme, setTheme] = useState(COMPARE_THEMES[0])
   const [comparison, setComparison] = useState(null)
   const [comparisonLoading, setComparisonLoading] = useState(false)
+  const firstLoad = useRef(true)
+  const prevTheme = useRef(null)
 
   useEffect(() => {
-    setLoading(true)
+    // Only the first load shows the full-page loader; a refresh-only bump
+    // (e.g. a live review arriving) refetches quietly behind current data.
+    if (firstLoad.current) setLoading(true)
     setError(null)
     get('/api/transactions')
       .then(setTransactions)
       .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
+      .finally(() => {
+        setLoading(false)
+        firstLoad.current = false
+      })
   }, [refresh])
 
   useEffect(() => {
-    setComparisonLoading(true)
+    // A theme switch is a real navigation and shows the loader; a
+    // refresh-only trigger keeps the current comparison on screen.
+    const isFreshLoad = prevTheme.current !== theme
+    prevTheme.current = theme
+    if (isFreshLoad) setComparisonLoading(true)
     get(`/api/transactions?compare_theme=${encodeURIComponent(theme)}`)
       .then((r) => setComparison(r.repeat_purchase_comparison || null))
       .catch(() => setComparison(null))

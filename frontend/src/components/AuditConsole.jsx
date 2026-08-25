@@ -125,14 +125,21 @@ export default function AuditConsole({ refresh }) {
   const wsRef = useRef(null)
   const reconnectTimer = useRef(null)
   const mountedRef = useRef(true)
+  const firstLoad = useRef(true)
 
   useEffect(() => {
-    setLoading(true)
+    // Only the first load shows the full-page loader; later refresh bumps
+    // (e.g. from a live review) reload quietly — the live WS feed already
+    // keeps entries current, this is just a periodic resync.
+    if (firstLoad.current) setLoading(true)
     setError(null)
     get('/api/audit?limit=100')
       .then((r) => setEntries(r.entries || []))
       .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
+      .finally(() => {
+        setLoading(false)
+        firstLoad.current = false
+      })
   }, [refresh])
 
   useEffect(() => {

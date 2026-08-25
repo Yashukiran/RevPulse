@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ResponsiveContainer,
   BarChart,
@@ -32,14 +32,18 @@ const SENTIMENT_COLOR = {
 
 const LINE_COLORS = ['#fb7185', '#fbbf24', '#f472b6']
 
-export default function Overview({ refresh }) {
+export default function Overview({ refresh, live }) {
   const [stats, setStats] = useState(null)
   const [transactions, setTransactions] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const firstLoad = useRef(true)
 
   useEffect(() => {
-    setLoading(true)
+    // Only show the full-page loading state on first mount; a refresh bump
+    // (e.g. triggered by a live review coming in) refetches quietly behind
+    // the data that's already on screen.
+    if (firstLoad.current) setLoading(true)
     setError(null)
     Promise.all([get('/api/stats'), get('/api/transactions')])
       .then(([s, t]) => {
@@ -47,7 +51,10 @@ export default function Overview({ refresh }) {
         setTransactions(t)
       })
       .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
+      .finally(() => {
+        setLoading(false)
+        firstLoad.current = false
+      })
   }, [refresh])
 
   const themeBars = useMemo(() => {
@@ -139,7 +146,22 @@ export default function Overview({ refresh }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-4 gap-4">
-        <StatTile label="Total reviews" value={stats?.total_reviews ?? '—'} />
+        <StatTile
+          label={
+            <span className="flex items-center gap-1.5">
+              Total reviews
+              <span
+                className={`inline-block h-1.5 w-1.5 rounded-full ${
+                  live ? 'bg-emerald-400' : 'bg-slate-600'
+                }`}
+              />
+              <span className={`text-[10px] font-medium ${live ? 'text-emerald-400' : 'text-slate-600'}`}>
+                live
+              </span>
+            </span>
+          }
+          value={stats?.total_reviews ?? '—'}
+        />
         <StatTile
           label="Positive sentiment"
           value={pctPositive != null ? `${pctPositive}%` : '—'}

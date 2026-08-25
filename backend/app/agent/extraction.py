@@ -51,6 +51,23 @@ Reviews:
 Reply with ONLY a JSON array of the objects, no other text."""
 
 
+def extract_one(review: "Review") -> dict | None:
+    """Label a single review synchronously (used by the live feedback endpoint)."""
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    payload = json.dumps({"id": review.id, "rating": review.rating, "text": review.text})
+    msg = client.messages.create(
+        model=EXTRACTION_MODEL,
+        max_tokens=300,
+        messages=[{"role": "user",
+                   "content": PROMPT.format(themes=", ".join(THEMES), reviews=payload)}],
+    )
+    text = msg.content[0].text.strip()
+    if text.startswith("```"):
+        text = text.strip("`").removeprefix("json").strip()
+    rows = json.loads(text)
+    return rows[0] if rows else None
+
+
 def extract_all(verbose: bool = True) -> int:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     db = SessionLocal()

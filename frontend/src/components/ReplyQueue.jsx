@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { get, post, formatDate, ISSUE_THEMES } from '../api'
 import Badge from './shared/Badge'
 import Spinner from './shared/Spinner'
@@ -101,9 +101,15 @@ export default function ReplyQueue({ refresh }) {
   const [matched, setMatched] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const prevTab = useRef(null)
 
   useEffect(() => {
-    setLoading(true)
+    // A tab switch (or the first mount) is a real navigation — show the
+    // loader. A refresh-only trigger (e.g. a live review coming in) refetches
+    // quietly, keeping the current rows on screen until the new ones arrive.
+    const isFreshLoad = prevTab.current !== tab
+    prevTab.current = tab
+    if (isFreshLoad) setLoading(true)
     setError(null)
     get(`/api/reviews?urgency=${tab}&limit=20`)
       .then((r) => {

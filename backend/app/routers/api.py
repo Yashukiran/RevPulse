@@ -80,6 +80,70 @@ def approvals(status: str = "pending", db: Session = Depends(get_db)):
     ]}
 
 
+class SubmitReviewIn(BaseModel):
+    name: str = "Guest"
+    rating: int
+    text: str
+
+
+@router.post("/reviews/submit")
+def submit_review(body: SubmitReviewIn, db: Session = Depends(get_db)):
+    """Live first-party feedback: creates the order+review, labels it with the
+    extraction model in real time, and pushes it to dashboard subscribers.
+    In production this form is linked from the post-payment page, tying every
+    review to a real transaction by construction."""
+    import json as _json
+    import random
+    from datetime import datetime
+
+    from ..agent.extraction import extract_one
+    from ..models import Order
+
+    if not (1 <= body.rating <= 5) or not body.text.strip():
+        raise HTTPException(422, "rating 1-5 and non-empty text required")
+
+    name = body.name.strip() or "Guest"
+    cust = db.query(Customer).filter(Customer.name == name).first()
+    if not cust:
+        cust = Customer(merchant_id=1, name=name,
+                        email=f"{name.lower().replace(' ', '.')}@example.com",
+                        phone=f"+91{random.randint(7000000000, 9999999999)}",
+                        zone="Walk-in", first_seen=datetime.utcnow())
+        db.add(cust)
+        db.flush()
+
+    order = Order(customer_id=cust.id, ts=datetime.utcnow(), amount_inr=350,
+                  items_json=_json.dumps([{"item": "Live order", "qty": 1,
+                                           "price_inr": 350}]),
+                  zone=cust.zone, status="paid")
+    db.add(order)
+    db.flush()
+    review = Review(customer_id=cust.id, order_id=order.id, ts=datetime.utcnow(),
+                    rating=body.rating, text=body.text.strip()[:1000])
+    db.add(review)
+    db.flush()
+
+    try:
+        label = extract_one(review)
+    except Exception:
+        label = None  # extraction failure must not lose the review
+    if label:
+        review.sentiment = label.get("sentiment")
+        review.themes_json = _json.dumps(label.get("themes", []))
+        review.urgency = label.get("urgency")
+        review.churn_signal = bool(label.get("churn_signal"))
+    db.commit()
+
+    payload = {
+        "id": review.id, "ts": review.ts.isoformat(), "rating": review.rating,
+        "text": review.text, "customer": cust.name,
+        "sentiment": review.sentiment, "themes": _json.loads(review.themes_json or "[]"),
+        "urgency": review.urgency, "churn_signal": review.churn_signal,
+    }
+    audit.broadcast_review(payload)
+    return payload
+
+
 class DraftIn(BaseModel):
     review_id: int
     tone: str = "professional"

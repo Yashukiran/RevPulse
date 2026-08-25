@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { get, post, formatINR, formatDate } from '../api'
 import Badge from './shared/Badge'
 import Spinner from './shared/Spinner'
@@ -152,24 +152,34 @@ export default function ActionCenter({ refresh, bumpRefresh }) {
 
   const [approvals, setApprovals] = useState([])
   const [approvalsLoading, setApprovalsLoading] = useState(true)
+  const approvalsFirstLoad = useRef(true)
 
   const [campaigns, setCampaigns] = useState([])
   const [campaignsLoading, setCampaignsLoading] = useState(true)
+  const campaignsFirstLoad = useRef(true)
 
   const loadApprovals = () => {
-    setApprovalsLoading(true)
+    // Only the first fetch shows a loader; later calls (a background refresh
+    // bump, or right after an approve/reject) swap the list in quietly.
+    if (approvalsFirstLoad.current) setApprovalsLoading(true)
     get('/api/approvals?status=pending')
       .then((r) => setApprovals(r.approvals || []))
       .catch(() => setApprovals([]))
-      .finally(() => setApprovalsLoading(false))
+      .finally(() => {
+        setApprovalsLoading(false)
+        approvalsFirstLoad.current = false
+      })
   }
 
   const loadCampaigns = () => {
-    setCampaignsLoading(true)
+    if (campaignsFirstLoad.current) setCampaignsLoading(true)
     get('/api/campaigns')
       .then((r) => setCampaigns(r.campaigns || []))
       .catch(() => setCampaigns([]))
-      .finally(() => setCampaignsLoading(false))
+      .finally(() => {
+        setCampaignsLoading(false)
+        campaignsFirstLoad.current = false
+      })
   }
 
   useEffect(() => {

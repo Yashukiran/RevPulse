@@ -49,3 +49,16 @@ async def audit_ws(ws: WebSocket):
         pass
     finally:
         audit.unsubscribe(ws)
+
+
+@app.websocket("/ws/reviews")
+async def reviews_ws(ws: WebSocket):
+    await ws.accept()
+    audit.subscribe_reviews(ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        audit.unsubscribe_reviews(ws)
