@@ -118,6 +118,8 @@ There is no external dataset. `scripts/generate_data.py` (seeded RNG, committed)
 
 ## Limitations
 
+The short version is below; [DEFENSE.md](DEFENSE.md) states the limits in full — cannibalisation, cold start, why a restaurant is the demo rather than the best vertical, when a discount is the wrong intervention, messaging compliance, and what breaks at scale.
+
 - Synthetic, seeded data (patterns are planted; the answer key is committed)
 - Single merchant, demo login only
 - Campaign customer responses are **simulated** and labeled as such everywhere
