@@ -26,4 +26,5 @@ print("TOOL CALLS:")
 for e in result["tool_events"]:
     print(f"  {e['tool']}({e['args']}) -> {e['verdict']}")
 print("=" * 70)
+print("stop_reason:", result.get("stop_reason"))
 print(result["text"])

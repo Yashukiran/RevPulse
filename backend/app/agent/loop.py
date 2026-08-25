@@ -41,11 +41,13 @@ def run_agent(user_message: str, history: list | None = None) -> dict:
     try:
         for _ in range(MAX_TURNS):
             resp = client.messages.create(
-                model=AGENT_MODEL, max_tokens=1600, system=SYSTEM, messages=msgs, tools=TOOLS
+                model=AGENT_MODEL, max_tokens=4000, system=SYSTEM, messages=msgs,
+                tools=TOOLS, thinking={"type": "disabled"},
             )
             reasoning = " ".join(b.text for b in resp.content if b.type == "text").strip()
             if resp.stop_reason != "tool_use":
-                return {"text": reasoning, "tool_events": events, "messages": msgs}
+                return {"text": reasoning, "stop_reason": resp.stop_reason,
+                        "tool_events": events, "messages": msgs}
 
             msgs.append({"role": "assistant", "content": resp.content})
             results = []
