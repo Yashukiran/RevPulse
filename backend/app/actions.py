@@ -50,6 +50,16 @@ def _create_link(*, reference_id: str, **kw) -> dict:
             if "reference" in msg and "exist" in msg:
                 ref = f"{reference_id[:24]}-{secrets.token_hex(3)}"
                 continue
+            # Razorpay test mode allows 30 payment links per account, for the
+            # life of the account. Past that we create a real Razorpay ORDER
+            # instead — the object an in-app checkout uses — so the money loop
+            # keeps working and attribution is unchanged.
+            if "limit of 30" in msg or "test mode limit" in msg:
+                order = rzp.create_order(
+                    amount_inr=kw["amount_inr"], reference_id=ref,
+                    notes=kw.get("notes", {}),
+                )
+                return {"id": order["id"], "short_url": "", "kind": "order"}
             transient = (
                 "too many requests" in msg or "rate limit" in msg or "429" in msg
                 or "connection" in msg or "timed out" in msg or "timeout" in msg

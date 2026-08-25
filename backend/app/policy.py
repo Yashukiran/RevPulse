@@ -31,6 +31,13 @@ APPROVAL_SEGMENT_SIZE = 25            # any segment above this needs a human
 # ---- customer protection ----
 OFFER_FREQUENCY_DAYS = 30             # max 1 offer per customer per 30 days
 
+# ---- proactive agent ----
+# An agent spending money on its own initiative is a different risk class from
+# one executing something the merchant just asked for, so proposals it raises
+# unprompted always go to the merchant — even when every other bound is clear.
+# Set False to let small, fully-compliant proposals execute automatically.
+PROACTIVE_REQUIRES_APPROVAL = True
+
 READ_OR_DRAFT = {
     "get_reviews", "get_review_stats", "get_customers", "get_customer_history",
     "get_transactions", "get_campaign_results", "draft_reply",
@@ -128,6 +135,19 @@ def check(tool: str, args: dict, db) -> tuple[str, str | None]:
 
 
 DEFAULT_AOV_INR = 450  # fallback when a customer has no order history
+
+
+def check_proactive(tool: str, args: dict, db) -> tuple[str, str | None]:
+    """Verdict for an action the agent raised on its own initiative.
+
+    Identical to check(), except that a clean ALLOWED is still escalated to the
+    merchant when PROACTIVE_REQUIRES_APPROVAL is on. Blocks stay blocks.
+    """
+    verdict, rule = check(tool, args, db)
+    if verdict == ALLOWED and PROACTIVE_REQUIRES_APPROVAL:
+        return NEEDS_APPROVAL, ("agent-initiated: proposals the agent raises on its own "
+                                "always require merchant approval")
+    return verdict, rule
 
 
 def est_offer_value_inr(args: dict, db=None) -> int:

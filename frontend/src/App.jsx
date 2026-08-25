@@ -109,13 +109,18 @@ export default function App() {
 
       ws.onmessage = (event) => {
         if (!mounted) return
-        let review
+        let msg
         try {
-          review = JSON.parse(event.data)
+          msg = JSON.parse(event.data)
         } catch {
           return
         }
-        setIncomingReview(review)
+        if (msg?.type === 'opportunity') {
+          bumpRefresh()
+          addToast('Agent found a revenue opportunity')
+          return
+        }
+        setIncomingReview(msg)
         bumpRefresh()
         addToast('New review received — dashboards updated')
       }

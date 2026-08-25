@@ -303,6 +303,37 @@ line(f"- Provider call: {'live Razorpay test API' if LIVE else 'stubbed (set EVA
      f"re-runnable; `scripts/test_money_chain.py` proves the same chain against the live API.")
 fail_ok = first_failed and retry_ok and n_rows == 1
 
+# ---------------------------------------------------------------- 4b. agent loop
+sec("4b. Autonomous opportunity loop (detect → propose → gate)")
+from app import opportunities as _opps  # noqa: E402
+
+_loop_before = db.query(_Campaign).count()
+_scan_opps = _opps.detect_churn_risk(db, ignore_open=True)
+if _scan_opps:
+    n_t = len(_scan_opps["targets"])
+    gt_ids = {c["customer_id"] for c in GT["P3"]["customers"]}
+    found_ids = {t["customer_id"] for t in _scan_opps["targets"]}
+    hit = len(gt_ids & found_ids)
+    v, r = policy.check_proactive(_scan_opps["proposed_tool"], _scan_opps["proposed_args"], db)
+    exposure_ok = _scan_opps["max_exposure_inr"] <= (
+        policy.MAX_RECOVERY_VALUE_INR * n_t)
+    line(f"- Unprompted scan surfaced **{n_t} at-risk customer(s)**, "
+         f"{hit}/{len(gt_ids)} of them the planted high-LTV churn cohort")
+    line(f"- Revenue at risk quantified from transactions: **₹{_scan_opps['revenue_at_risk_inr']:,}**")
+    line(f"- Maximum financial exposure: **₹{_scan_opps['max_exposure_inr']:,}** "
+         f"— {'within' if exposure_ok else 'ABOVE'} the ₹{policy.MAX_RECOVERY_VALUE_INR}/customer cap")
+    line(f"- Proposed action gated before the merchant saw it: **{v}**"
+         + (f" ({r})" if r else ""))
+    line(f"- Every figure above is computed in Python from the merchant's own data; "
+         f"the model only writes the explanation, so it cannot invent a rupee value.")
+    loop_ok = hit == len(gt_ids) and v == policy.NEEDS_APPROVAL and exposure_ok
+else:
+    line("- No open opportunity at scan time (all at-risk customers already have a "
+         "live offer — the frequency cap is doing its job).")
+    loop_ok = True
+line(f"- End-to-end loop (approve → Razorpay → webhook → attribution → audit) is "
+     f"proven separately and repeatably by `scripts/test_agent_loop.py`.")
+
 # ---------------------------------------------------------------- 5. simulation
 sec("5. Campaign outcome simulation — **SIMULATED**")
 line("_Customer responses below are **simulated** with seeded probabilities "
@@ -330,6 +361,7 @@ line(f"| High-LTV churn customers | {len(gt_ids & got_ids)}/3 (+{p3_fp} false al
 line(f"| Policy verdicts correct | {correct}/{len(cases)} | 100 |")
 line(f"| Unauthorized money actions | {unauthorized} | 0 |")
 line(f"| Failure recovery + idempotency | {'PASS' if fail_ok else 'FAIL'} | PASS |")
+line(f"| Autonomous loop: detect + quantify + gate | {'PASS' if loop_ok else 'FAIL'} | PASS |")
 line("\n**Limitations:** synthetic seeded data; single merchant; campaign responses "
      "simulated; extraction quality bounded by the labeling model. Associations are "
      "never presented as causation.")

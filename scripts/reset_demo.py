@@ -14,12 +14,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
-    Approval, AuditLog, BudgetSpend, Campaign, OfferRedemption, Order, PaymentLink,
+    Approval, AuditLog, BudgetSpend, Campaign, OfferRedemption, Opportunity, Order,
+    PaymentLink,
 )
 
 db = SessionLocal()
 n_orders = db.query(Order).filter(Order.campaign_id.isnot(None)).delete()
-for model in (PaymentLink, OfferRedemption, Approval, AuditLog, BudgetSpend, Campaign):
+for model in (PaymentLink, OfferRedemption, Approval, Opportunity, AuditLog, BudgetSpend,
+              Campaign):
     n = db.query(model).delete()
     print(f"cleared {model.__tablename__}: {n}")
 print(f"cleared attributed orders: {n_orders}")

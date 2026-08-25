@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from .. import audit
 from ..agent import tools
-from ..db import get_db
+from ..db import SessionLocal, get_db, utc_iso
 from ..models import Approval, AuditLog, Customer, MenuItem, Merchant, Review
 
 router = APIRouter(prefix="/api")
@@ -73,7 +73,7 @@ def approvals(status: str = "pending", db: Session = Depends(get_db)):
     rows = (db.query(Approval).filter(Approval.status == status)
             .order_by(Approval.id.desc()).all())
     return {"approvals": [
-        {"id": a.id, "audit_id": a.audit_id, "ts": a.ts.isoformat(), "tool": a.tool,
+        {"id": a.id, "audit_id": a.audit_id, "ts": utc_iso(a.ts), "tool": a.tool,
          "args": json.loads(a.args_json), "agent_reasoning": a.agent_reasoning,
          "status": a.status}
         for a in rows
@@ -135,12 +135,32 @@ def submit_review(body: SubmitReviewIn, db: Session = Depends(get_db)):
     db.commit()
 
     payload = {
-        "id": review.id, "ts": review.ts.isoformat(), "rating": review.rating,
+        "id": review.id, "ts": utc_iso(review.ts), "rating": review.rating,
         "text": review.text, "customer": cust.name,
         "sentiment": review.sentiment, "themes": _json.loads(review.themes_json or "[]"),
         "urgency": review.urgency, "churn_signal": review.churn_signal,
     }
     audit.broadcast_review(payload)
+
+    # The agent reacts on its own: a churn signal from a valuable customer is
+    # exactly the trigger the opportunity scanner exists for. Runs off-thread so
+    # the customer's feedback form still returns immediately.
+    if review.churn_signal:
+        import threading
+
+        from .. import opportunities as _opps
+
+        def _rescan():
+            s = SessionLocal()
+            try:
+                _opps.scan(s, actor="agent")
+            except Exception:
+                pass
+            finally:
+                s.close()
+
+        threading.Thread(target=_rescan, daemon=True).start()
+
     return payload
 
 

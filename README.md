@@ -2,6 +2,33 @@
 
 Businesses collect hundreds of reviews and almost none of that information ever becomes action. RevPulse reads a merchant's first-party reviews and Razorpay transaction data, finds what is costing them money, and turns it into revenue actions — recovery offers, win-back campaigns, one-click review replies — **with every money action explainable, bounded, gated, and audited.**
 
+The agent is the product, not a chatbot bolted onto a dashboard. Nobody asks it anything: it scans on its own, surfaces an opportunity with the evidence behind it, states what the action is worth and the most it can cost, and waits for the merchant to approve.
+
+## The autonomous loop
+
+```
+churn-risk detection      a high-value customer's own review says they are leaving
+        ↓
+opportunity               evidence + revenue at risk + expected return + MAXIMUM EXPOSURE
+        ↓
+policy engine             deterministic bounds; agent-initiated proposals always escalate
+        ↓
+merchant approval         the human gate — nothing moves without it
+        ↓
+Razorpay test mode        unique payment link / order + unique offer code per customer
+        ↓
+payment webhook           revenue attributed back to the opportunity that caused it
+        ↓
+audit trail               every step written before it happened, streamed live to the UI
+```
+
+One command proves the whole chain, repeatably: `python scripts/test_agent_loop.py`.
+
+Two rules make this defensible rather than a demo trick:
+
+1. **Every rupee figure is computed in Python from the merchant's own data.** The model writes the explanation and never the arithmetic, so it cannot invent a number.
+2. **Maximum financial exposure is exact, and it is shown next to the projection.** Expected revenue is a projection with its assumption printed beside it; worst-case cost is not a projection at all.
+
 Built for the Razorpay AI Buildathon, Track 01 (AI Growth & Agentic Commerce). Demo merchant: *Biryani House*, a fictional Bengaluru delivery restaurant.
 
 ## The core safety principle
@@ -24,12 +51,14 @@ reviews + transactions → agent (Claude tool-calling) → POLICY ENGINE → Raz
 | Per-campaign cap | ₹2,000 |
 | Needs merchant approval | any campaign · any offer > ₹150 · any segment > 25 customers · posting any reply publicly |
 | Always blocked | refunds · withdrawals · payout changes · exceeding budget · more than 1 offer per customer per 30 days · re-targeting customers who already redeemed |
+| Agent-initiated proposals | always escalate to the merchant, even when every other bound is clear (`PROACTIVE_REQUIRES_APPROVAL`) |
 | Idempotency | every Razorpay call carries an idempotency key — a retry can never double-create or double-charge |
 
 Customer-protection bounds (frequency cap, dedupe) are enforced as strictly as money bounds.
 
 ## Features
 
+0. **The growth agent (the product)** — scans transaction and feedback signals unprompted, raises opportunities with evidence, money maths and a policy verdict already attached, executes on approval, and measures the result. It rescans automatically when new feedback carries a churn signal.
 1. **Review intelligence** — what customers love/hate, theme trends, time-of-day and zone concentration
 2. **Issue & opportunity detection** — clustered recurring problems with click-through to the underlying evidence (actual reviews)
 3. **Reply queue** — urgent/important/routine triage, AI-drafted replies in 3 tones; posting is a gated action

@@ -163,6 +163,47 @@ class BudgetSpend(Base):
     note: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
+class Opportunity(Base):
+    """A revenue opportunity the agent found on its own.
+
+    Carries the evidence it was derived from, the money maths (deterministic),
+    the concrete action it proposes, the policy verdict that action would get,
+    and — once executed — the measured outcome. This is the unit the merchant
+    actually approves.
+    """
+
+    __tablename__ = "opportunities"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    kind: Mapped[str] = mapped_column(String(40))          # churn_risk_winback
+    title: Mapped[str] = mapped_column(String(200))
+    rationale: Mapped[str] = mapped_column(Text)           # plain-language why (agent-written)
+    evidence_json: Mapped[str] = mapped_column(Text)       # reviews + transactions behind it
+    customer_ids_json: Mapped[str] = mapped_column(Text)
+
+    # money maths — computed in Python, never by the model
+    revenue_at_risk_inr: Mapped[int] = mapped_column(Integer, default=0)
+    expected_revenue_inr: Mapped[int] = mapped_column(Integer, default=0)
+    max_exposure_inr: Mapped[int] = mapped_column(Integer, default=0)
+    assumed_redemption_rate: Mapped[float] = mapped_column(Float, default=0.0)
+
+    # the concrete action proposed, and what the policy engine says about it
+    proposed_tool: Mapped[str] = mapped_column(String(60))
+    proposed_args_json: Mapped[str] = mapped_column(Text)
+    policy_verdict: Mapped[str] = mapped_column(String(20))
+    policy_rule_hit: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    excluded_note: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+    status: Mapped[str] = mapped_column(String(20), default="open", index=True)
+    # open / awaiting_approval / approved / executed / rejected / failed / expired
+    campaign_id: Mapped[int | None] = mapped_column(ForeignKey("campaigns.id"), nullable=True)
+    approval_id: Mapped[int | None] = mapped_column(ForeignKey("approvals.id"), nullable=True)
+    audit_id: Mapped[int | None] = mapped_column(ForeignKey("audit_log.id"), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decided_ts: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class OfferRedemption(Base):
     """Tracks offers sent/redeemed per customer — feeds frequency cap and dedupe rules."""
 

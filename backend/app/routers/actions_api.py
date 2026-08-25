@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from .. import actions, audit
 from ..agent.loop import run_agent
 from ..db import get_db
-from ..models import Approval, AuditLog, OfferRedemption, Order, PaymentLink
+from ..models import Approval, AuditLog, OfferRedemption, Opportunity, Order, PaymentLink
 from ..razorpay_client import verify_webhook_signature
 
 router = APIRouter()
@@ -115,14 +115,24 @@ def _mark_link(db, link: PaymentLink, outcome: str, payment_id: str | None) -> d
     else:
         link.status = "failed"
     db.commit()
+    # Close the loop: attribute the payment back to the opportunity that caused it.
+    opp = (db.query(Opportunity).filter_by(campaign_id=link.campaign_id).first()
+           if link.campaign_id else None)
     entry = audit.write_ahead(db, actor="system", tool=f"webhook:payment.{outcome}",
                               args={"razorpay_link_id": link.razorpay_link_id,
                                     "payment_id": payment_id,
                                     "amount_inr": link.amount_inr,
-                                    "campaign_id": link.campaign_id},
-                              reasoning=None, verdict="ALLOWED", rule=None)
+                                    "campaign_id": link.campaign_id,
+                                    "opportunity_id": opp.id if opp else None},
+                              reasoning=(f"Payment attributed to opportunity #{opp.id} "
+                                         f"via its unique campaign link" if opp else None),
+                              verdict="ALLOWED", rule=None)
     audit.complete(db, entry, status="success", razorpay_ref=payment_id)
-    return {"attributed_campaign_id": link.campaign_id, "amount_inr": link.amount_inr}
+    if opp:
+        from .. import opportunities as _opps
+        audit.broadcast_opportunity(_opps.serialize(opp, db))
+    return {"attributed_campaign_id": link.campaign_id, "amount_inr": link.amount_inr,
+            "attributed_opportunity_id": opp.id if opp else None}
 
 
 @router.post("/webhooks/razorpay")

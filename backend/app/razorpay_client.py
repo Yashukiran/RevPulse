@@ -52,6 +52,22 @@ def create_payment_link(*, amount_inr: int, description: str, customer_name: str
     })
 
 
+def create_order(*, amount_inr: int, reference_id: str, notes: dict) -> dict:
+    """Create a Razorpay order (the object a real in-app checkout is built on).
+
+    Used when the account's payment-link allowance is exhausted — Razorpay test
+    mode caps an account at 30 payment links for its lifetime, while orders are
+    unlimited. Attribution is unaffected: the order carries the same unique
+    offer code in its notes and its id is stored against the campaign.
+    """
+    return client().order.create({
+        "amount": amount_inr * 100,          # paise
+        "currency": "INR",
+        "receipt": reference_id[:40],
+        "notes": {k: str(v) for k, v in notes.items()},
+    })
+
+
 def verify_webhook_signature(body: bytes, signature: str) -> bool:
     secret = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
     if not secret:

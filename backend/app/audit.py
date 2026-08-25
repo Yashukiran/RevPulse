@@ -11,6 +11,7 @@ import asyncio
 import json
 from datetime import datetime
 
+from .db import utc_iso
 from .models import AuditLog
 
 # WebSocket subscribers (set by main.py); broadcast is best-effort and never
@@ -46,6 +47,12 @@ def broadcast_review(payload: dict) -> None:
     _send_to(_review_subscribers, json.dumps(payload, default=str))
 
 
+def broadcast_opportunity(payload: dict) -> None:
+    """Push an agent-found opportunity to dashboard subscribers (best-effort)."""
+    _send_to(_review_subscribers,
+             json.dumps({"type": "opportunity", "opportunity": payload}, default=str))
+
+
 def _send_to(subscribers: set, payload: str) -> None:
     if not subscribers or _loop is None:
         return
@@ -72,12 +79,12 @@ def _broadcast(entry: AuditLog) -> None:
 
 def serialize(e: AuditLog) -> dict:
     return {
-        "id": e.id, "ts": e.ts.isoformat(), "actor": e.actor, "tool": e.tool,
+        "id": e.id, "ts": utc_iso(e.ts), "actor": e.actor, "tool": e.tool,
         "args": json.loads(e.args_json) if e.args_json else {},
         "agent_reasoning": e.agent_reasoning, "policy_verdict": e.policy_verdict,
         "policy_rule_hit": e.policy_rule_hit, "razorpay_ref": e.razorpay_ref,
         "status": e.status, "error": e.error,
-        "completed_ts": e.completed_ts.isoformat() if e.completed_ts else None,
+        "completed_ts": utc_iso(e.completed_ts),
     }
 
 

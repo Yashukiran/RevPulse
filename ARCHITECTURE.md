@@ -40,6 +40,22 @@
                not statistical, revenue attribution)
 ```
 
+## The proactive layer — `backend/app/opportunities.py`
+
+This is what makes the thing an agent rather than a dashboard with a chat box. Nothing here waits to be asked.
+
+**Detection is deterministic.** A churn-risk signal is a rule, not a vibe: a churn-flagged review inside the lookback window from a customer whose lifetime spend clears the high-value line (₹15,000 — the same threshold the evaluation harness scores against, so detection is measurable rather than assertable). Customers the guardrails would refuse — recently offered, already redeemed — are filtered out *before* the proposal is formed, and the count of who was excluded is shown to the merchant. The bounds shape the proposal; they are not a veto bolted on afterwards.
+
+**The money maths never touches the model.** Revenue at risk is summed from real orders. Maximum exposure is the exact worst case: the incentive given away if every targeted customer redeems. Expected revenue is a projection and is labelled as one, with its assumption printed next to it, because this merchant has no completed win-back campaigns to forecast from. The model receives these figures and writes two or three sentences of explanation; it is told to use only the numbers given. If that call fails, a deterministic sentence takes its place and the opportunity is still fully usable — the language is a convenience, the substance is not.
+
+**The guardrails run before the merchant ever sees the card.** Each opportunity carries the verdict its action would receive, so the UI can say "needs your approval" honestly instead of promising something the policy engine would refuse. `policy.check_proactive()` adds one rule on top of the normal bounds: an action the agent raises on its own initiative always escalates to a human, even when every other bound is clear. An agent spending money because it decided to is a different risk class from one executing what the merchant just asked for.
+
+The verdict shown at scan time is a preview, never an authorisation. When the merchant approves, the action is re-checked against the policy engine at that moment — budget may have been spent, an offer may have gone out elsewhere — and only then executed.
+
+**The loop closes.** Execution creates one Razorpay object and one unique offer code per customer; the payment webhook attributes the payment back through the campaign to the opportunity that caused it. `outcome` on an opportunity is therefore a join, not an estimate: targeted, redeemed, revenue attributed, incentive actually paid.
+
+Proven end to end, repeatably, by `scripts/test_agent_loop.py`: detect → evidence → bounded maths → gate → approval → real Razorpay object → webhook → attribution → audit trail.
+
 ## Components
 
 ### Agent loop — `backend/app/agent/loop.py`

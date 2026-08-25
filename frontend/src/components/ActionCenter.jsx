@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { get, post, formatINR, formatDate, formatTime } from '../api'
 import Badge from './shared/Badge'
 import Spinner from './shared/Spinner'
+import OpportunityCard from './OpportunityCard'
 
 const VERDICT_TONE = {
   ALLOWED: 'emerald',
@@ -220,6 +221,37 @@ export default function ActionCenter({ refresh, agentRun, onAgentMessage, onRunA
   const [campaignsLoading, setCampaignsLoading] = useState(true)
   const campaignsFirstLoad = useRef(true)
 
+  const [opportunities, setOpportunities] = useState([])
+  const [opportunitiesLoading, setOpportunitiesLoading] = useState(true)
+  const [scanning, setScanning] = useState(false)
+  const opportunitiesFirstLoad = useRef(true)
+
+  const loadOpportunities = () => {
+    if (opportunitiesFirstLoad.current) setOpportunitiesLoading(true)
+    get('/api/opportunities')
+      .then((r) => {
+        const rows = r.opportunities || []
+        rows.sort((a, b) => {
+          if ((a.status === 'open') !== (b.status === 'open')) return a.status === 'open' ? -1 : 1
+          return new Date(b.ts) - new Date(a.ts)
+        })
+        setOpportunities(rows)
+      })
+      .catch(() => setOpportunities([]))
+      .finally(() => {
+        setOpportunitiesLoading(false)
+        opportunitiesFirstLoad.current = false
+      })
+  }
+
+  const scanNow = () => {
+    setScanning(true)
+    post('/api/opportunities/scan')
+      .then(() => loadOpportunities())
+      .catch(() => {})
+      .finally(() => setScanning(false))
+  }
+
   const loadApprovals = () => {
     // Only the first fetch shows a loader; later calls (a background refresh
     // bump, or right after an approve/reject) swap the list in quietly.
@@ -247,6 +279,7 @@ export default function ActionCenter({ refresh, agentRun, onAgentMessage, onRunA
   useEffect(() => {
     loadApprovals()
     loadCampaigns()
+    loadOpportunities()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refresh])
 
@@ -272,14 +305,52 @@ export default function ActionCenter({ refresh, agentRun, onAgentMessage, onRunA
 
   return (
     <div className="space-y-8">
+      <section>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h3 className="text-sm font-semibold tracking-tight text-slate-200">
+            Agent opportunities{' '}
+            {opportunities.length > 0 && (
+              <span className="text-sky-400">({opportunities.length})</span>
+            )}
+          </h3>
+          <button
+            onClick={scanNow}
+            disabled={scanning}
+            className="px-3 py-1.5 rounded-lg bg-sky-500/90 hover:bg-sky-500 disabled:opacity-50 text-slate-950 text-xs font-semibold flex items-center gap-1.5"
+          >
+            {scanning && <Spinner className="border-slate-950/40 border-t-slate-950" />}
+            Scan now
+          </button>
+        </div>
+        {opportunitiesLoading ? (
+          <div className="flex items-center gap-2 text-slate-400 text-xs">
+            <Spinner /> Loading opportunities…
+          </div>
+        ) : opportunities.length === 0 ? (
+          <p className="text-xs text-slate-500">
+            No opportunities right now. The agent scans on startup and whenever new customer
+            feedback signals churn.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {opportunities.map((o) => (
+              <OpportunityCard key={o.id} opportunity={o} onDecided={loadOpportunities} />
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-        <h3 className="text-sm font-semibold tracking-tight mb-3">Ask the growth agent</h3>
+        <h3 className="text-sm font-semibold tracking-tight">Ask the agent a question</h3>
+        <p className="mt-0.5 text-[11px] text-slate-500">
+          The agent works proactively above — this is for ad-hoc questions.
+        </p>
         <textarea
           value={message}
           onChange={(e) => onAgentMessage(e.target.value)}
           placeholder="e.g. Which customers should we win back this week, and why?"
           rows={3}
-          className="w-full bg-slate-950/60 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-400/50 resize-none"
+          className="mt-3 w-full bg-slate-950/60 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-400/50 resize-none"
         />
         <div className="mt-2 flex items-center gap-3">
           <button

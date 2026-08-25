@@ -22,6 +22,18 @@ class Base(DeclarativeBase):
     pass
 
 
+def utc_iso(dt) -> str | None:
+    """Serialise a stored timestamp as explicit UTC.
+
+    Everything is stored as naive UTC; without the trailing marker a browser
+    reads the string as local time and renders "5h ago" for something that just
+    happened.
+    """
+    if dt is None:
+        return None
+    return dt.isoformat() + ("Z" if dt.tzinfo is None else "")
+
+
 def get_db():
     db = SessionLocal()
     try:
