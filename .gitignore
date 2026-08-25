@@ -17,8 +17,9 @@ dist/
 *.db
 *.sqlite3
 
-# OS / editor
+# OS / editor / local tooling
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+.claude/

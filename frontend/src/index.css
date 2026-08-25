@@ -1,1 +1,47 @@
 @import "tailwindcss";
+
+html,
+body {
+  background-color: #020617;
+}
+
+@keyframes flash-emerald {
+  0% {
+    background-color: rgba(52, 211, 153, 0.28);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.flash-emerald {
+  animation: flash-emerald 1.1s ease-out;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.1s ease-in-out infinite;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #1e293b;
+  border-radius: 9999px;
+}
