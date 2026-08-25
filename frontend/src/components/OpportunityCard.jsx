@@ -328,6 +328,52 @@ export default function OpportunityCard({ opportunity, onDecided, compact = fals
               )}
             </div>
           )}
+
+          {outcome?.incrementality && (
+            <div className="mt-2 bg-slate-950/60 border border-slate-800 rounded-lg p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1.5">
+                Incrementality — measured against a held-back control group
+              </p>
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+                <span className="text-slate-300">
+                  Offered:{' '}
+                  <span className="text-emerald-400 font-semibold">
+                    {Math.round(outcome.incrementality.treated.rate * 100)}%
+                  </span>{' '}
+                  returned
+                  <span className="text-slate-500">
+                    {' '}({outcome.incrementality.treated.returned}/{outcome.incrementality.treated.n})
+                  </span>
+                </span>
+                <span className="text-slate-300">
+                  Control (no offer):{' '}
+                  <span className="text-slate-100 font-semibold">
+                    {Math.round(outcome.incrementality.control.rate * 100)}%
+                  </span>{' '}
+                  returned
+                  <span className="text-slate-500">
+                    {' '}({outcome.incrementality.control.returned}/{outcome.incrementality.control.n})
+                  </span>
+                </span>
+                <span className="text-slate-300">
+                  Difference:{' '}
+                  <span
+                    className={
+                      outcome.incrementality.lift_pct_points >= 0
+                        ? 'text-emerald-400 font-semibold'
+                        : 'text-rose-400 font-semibold'
+                    }
+                  >
+                    {outcome.incrementality.lift_pct_points > 0 ? '+' : ''}
+                    {outcome.incrementality.lift_pct_points} pts
+                  </span>
+                </span>
+              </div>
+              <p className="mt-1.5 text-[11px] text-amber-400/80 leading-relaxed">
+                {outcome.incrementality.note}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

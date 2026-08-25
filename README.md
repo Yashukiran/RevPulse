@@ -25,6 +25,10 @@ Razorpay test mode        unique payment link / order + unique offer code per cu
         ↓
 payment webhook           revenue attributed back to the opportunity that caused it
         ↓
+holdout comparison        a share of the segment gets no offer, so return rates can be
+                          compared — attribution says the payment came through us,
+                          only a control group speaks to whether we caused it
+        ↓
 audit trail               every step written before it happened, streamed live to the UI
 ```
 
@@ -100,7 +104,7 @@ cd backend && .venv/Scripts/python -m uvicorn app.main:app --port 8000
 cd frontend && npm install && npm run dev              # http://localhost:5173
 ```
 
-Tests: `scripts/test_policy.py` (adversarial policy cases), `scripts/test_money_chain.py` (full Razorpay chain incl. idempotency), `scripts/evaluate.py` (full harness), `scripts/test_agent.py` (agent surfaces planted insights). They build their own fixtures and restore state, so they can be re-run in any order without affecting demo data.
+Tests: `scripts/test_policy.py` (adversarial policy cases), `scripts/test_holdout.py` (control-group split and incrementality), `scripts/test_money_chain.py` (full Razorpay chain incl. idempotency), `scripts/evaluate.py` (full harness), `scripts/test_agent.py` (agent surfaces planted insights). They build their own fixtures and restore state, so they can be re-run in any order without affecting demo data.
 
 Demo prep: `scripts/reset_demo.py` clears campaigns and the audit trail while keeping reviews and their cached labels; `scripts/seed_demo.py` then creates one recovery campaign with real test-mode links and marks two redeemed.
 

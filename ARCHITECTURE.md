@@ -60,6 +60,8 @@ The verdict shown at scan time is a preview, never an authorisation. When the me
 
 **The loop closes.** Execution creates one Razorpay object and one unique offer code per customer; the payment webhook attributes the payment back through the campaign to the opportunity that caused it. `outcome` on an opportunity is therefore a join, not an estimate: targeted, redeemed, revenue attributed, incentive actually paid.
 
+**Attribution is not causation, so there is a control group.** Proving a payment arrived through our link says nothing about whether that customer would have come back anyway — the money may simply have been discounted for no reason. When a segment is large enough (six customers), roughly 30% are held back: same profile, no offer, no link. Return rates are then compared across both groups over the same window, counting *any* order rather than only ones through our links, since a control customer has none and a treated customer who returns by another route still returned. The split is seeded off the campaign id, so it is reproducible and cannot be quietly re-rolled until the numbers look better. Below six customers the holdout is skipped and the reason is recorded — a control group of two proves nothing, and saying so is more useful than producing a figure that resembles evidence.
+
 Proven end to end, repeatably, by `scripts/test_agent_loop.py`: detect → evidence → bounded maths → gate → approval → real Razorpay object → webhook → attribution → audit trail.
 
 ## Components

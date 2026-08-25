@@ -105,8 +105,14 @@ audit_before = db.query(AuditLog).count()
 
 # ---------------------------------------------------------------- 1. detection
 found = opps.scan(db)
-check("agent finds the opportunity unprompted", len(found) == 1)
-opp = found[0]
+check("agent finds opportunities unprompted", len(found) >= 1,
+      f"({len(found)}: {[o.kind for o in found]})")
+
+# A scan can raise several opportunities from different signals; take the one
+# that picked up this fixture customer's churn-signal review.
+opp = next((o for o in found
+            if cust.id in json.loads(o.customer_ids_json)), None)
+check("the churn signal reached a proposal", opp is not None)
 data = opps.serialize(opp, db)
 check("targets the at-risk customer", cust.id in data["customer_ids"],
       f"({len(data['customer_ids'])} targeted)")

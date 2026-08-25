@@ -494,9 +494,62 @@ def _raise_opportunity(db, candidate: dict, entry) -> Opportunity:
     return opp
 
 
+RETURN_WINDOW_DAYS = 30   # how long after a campaign a return still counts
+
+
+def _return_rate(db, customer_ids: list[int], since: datetime) -> tuple[int, int]:
+    """How many of these customers placed ANY order after `since`.
+
+    Deliberately counts every order, not only ones through our link: a control
+    customer has no link, and a treated customer who returns by some other route
+    still returned. Anything narrower would flatter the treated group.
+    """
+    if not customer_ids:
+        return 0, 0
+    until = since + timedelta(days=RETURN_WINDOW_DAYS)
+    returned = 0
+    for cid in customer_ids:
+        if db.query(Order).filter(Order.customer_id == cid, Order.ts > since,
+                                  Order.ts <= until).count():
+            returned += 1
+    return returned, len(customer_ids)
+
+
+def incrementality(db, campaign) -> dict | None:
+    """Compare the treated group against the held-back control group.
+
+    Attribution proves a payment came through our link. It cannot prove the
+    offer caused a return that would have happened anyway. This can — within the
+    limits of the sample size, which is reported alongside every figure and
+    never hidden.
+    """
+    control_ids = json.loads(campaign.control_ids_json) if campaign.control_ids_json else []
+    if not control_ids:
+        return None
+    all_ids = json.loads(campaign.customer_ids_json)
+    treated_ids = [c for c in all_ids if c not in set(control_ids)]
+
+    t_returned, t_n = _return_rate(db, treated_ids, campaign.ts)
+    c_returned, c_n = _return_rate(db, control_ids, campaign.ts)
+    t_rate = t_returned / t_n if t_n else 0.0
+    c_rate = c_returned / c_n if c_n else 0.0
+    return {
+        "treated": {"n": t_n, "returned": t_returned, "rate": round(t_rate, 3)},
+        "control": {"n": c_n, "returned": c_returned, "rate": round(c_rate, 3)},
+        "lift_pct_points": round((t_rate - c_rate) * 100, 1),
+        "window_days": RETURN_WINDOW_DAYS,
+        "note": (
+            "Directional only. The control group received no offer and is measured on "
+            "the same window, so this compares like with like — but at these sample "
+            "sizes the difference is not statistically significant and must not be "
+            "read as a proven effect."
+        ),
+    }
+
+
 def measured(db, opp: Opportunity) -> dict:
     """Outcome so far for an executed opportunity (exact, via campaign links)."""
-    from .models import PaymentLink
+    from .models import Campaign, PaymentLink
 
     if not opp.campaign_id:
         return {"redeemed": 0, "targeted": len(json.loads(opp.customer_ids_json)),
@@ -505,11 +558,16 @@ def measured(db, opp: Opportunity) -> dict:
     paid = [l for l in links if l.status == "paid"]
     pct = WINBACK_DISCOUNT_PCT
     incentive = sum(int(round(l.amount_inr / (1 - pct / 100) - l.amount_inr)) for l in paid)
+    campaign = db.get(Campaign, opp.campaign_id)
+    control_ids = (json.loads(campaign.control_ids_json)
+                   if campaign and campaign.control_ids_json else [])
     return {
         "targeted": len(links) or len(json.loads(opp.customer_ids_json)),
         "redeemed": len(paid),
         "revenue_inr": sum(l.amount_inr for l in paid),
         "incentive_inr": incentive,
+        "control_group_size": len(control_ids),
+        "incrementality": incrementality(db, campaign) if campaign else None,
         "links": [{"customer_id": l.customer_id, "amount_inr": l.amount_inr,
                    "short_url": l.short_url, "status": l.status} for l in links],
     }

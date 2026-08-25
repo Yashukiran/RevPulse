@@ -63,3 +63,11 @@ def ensure_columns() -> None:
             for name, ddl in columns:
                 if name not in existing:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
+# Run at import: scripts and the API both open the database this way, and a
+# schema older than the code would fail at the first write rather than here.
+try:
+    ensure_columns()
+except Exception:
+    pass  # a database that does not exist yet is created by metadata.create_all

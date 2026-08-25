@@ -8,6 +8,7 @@ have already passed the policy engine and hold a write-ahead audit entry.
 from __future__ import annotations
 
 import json
+import random
 import secrets
 import time
 from datetime import datetime
@@ -70,6 +71,35 @@ def _create_link(*, reference_id: str, **kw) -> dict:
                 continue
             raise
     raise last  # exhausted retries
+
+
+# Below this segment size a holdout is statistically meaningless — splitting
+# three people into treated and control tells you nothing — so we skip it and
+# say so rather than producing a number that looks like evidence.
+HOLDOUT_MIN_SEGMENT = 6
+HOLDOUT_SHARE = 0.30
+
+
+def split_holdout(customer_ids: list[int], campaign_id: int) -> tuple[list[int], list[int]]:
+    """Split a segment into treated and control.
+
+    Without a control group we can only prove a payment came through our link
+    (attribution); we cannot show the offer caused a return that would not have
+    happened anyway. Holding a share of the segment back — same profile, no
+    offer — is what makes that difference measurable.
+
+    The split is seeded off the campaign id, so it is reproducible and cannot be
+    quietly re-rolled until the result looks better.
+    """
+    if len(customer_ids) < HOLDOUT_MIN_SEGMENT:
+        return list(customer_ids), []
+    rng = random.Random(f"holdout-{campaign_id}")
+    shuffled = sorted(customer_ids)
+    rng.shuffle(shuffled)
+    n_control = max(1, int(round(len(shuffled) * HOLDOUT_SHARE)))
+    control = sorted(shuffled[:n_control])
+    treated = sorted(shuffled[n_control:])
+    return treated, control
 
 
 def _aov(db, customer_id: int) -> int:
@@ -136,13 +166,27 @@ def create_recovery_offer(db, args: dict) -> dict:
     )
     db.add(campaign)
     db.flush()
-    links = _make_links(db, campaign, customer_ids, discount, "create_recovery_offer", args)
+
+    # Hold a share of the segment back with no offer, so the campaign can be
+    # measured against customers who were treated identically apart from the
+    # intervention itself.
+    treated, control = split_holdout(customer_ids, campaign.id)
+    campaign.control_ids_json = json.dumps(control) if control else None
+    campaign.budget_inr = est_offer_value_inr(args, db) * len(treated)
+
+    links = _make_links(db, campaign, treated, discount, "create_recovery_offer", args)
     db.add(BudgetSpend(date=datetime.utcnow().strftime("%Y-%m-%d"),
                        campaign_id=campaign.id, amount_inr=campaign.budget_inr,
                        note=f"recovery offer {campaign.offer_code}"))
     db.commit()
     return {"campaign_id": campaign.id, "offer_code": campaign.offer_code,
-            "links": links, "incentive_budget_inr": campaign.budget_inr}
+            "links": links, "incentive_budget_inr": campaign.budget_inr,
+            "treated": len(treated), "control": len(control),
+            "holdout_note": (f"{len(control)} of {len(customer_ids)} customers held back as a "
+                             f"control group to measure incrementality"
+                             if control else
+                             f"segment of {len(customer_ids)} is below the {HOLDOUT_MIN_SEGMENT}-"
+                             f"customer minimum for a meaningful holdout; attribution only")}
 
 
 def create_campaign(db, args: dict) -> dict:
