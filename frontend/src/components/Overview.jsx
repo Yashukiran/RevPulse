@@ -32,11 +32,12 @@ const SENTIMENT_COLOR = {
 
 const LINE_COLORS = ['#fb7185', '#fbbf24', '#f472b6']
 
-export default function Overview({ refresh, live }) {
+export default function Overview({ refresh, live, onNavigate }) {
   const [stats, setStats] = useState(null)
   const [transactions, setTransactions] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [openOpps, setOpenOpps] = useState([])
   const firstLoad = useRef(true)
 
   useEffect(() => {
@@ -45,10 +46,14 @@ export default function Overview({ refresh, live }) {
     // the data that's already on screen.
     if (firstLoad.current) setLoading(true)
     setError(null)
-    Promise.all([get('/api/stats'), get('/api/transactions')])
-      .then(([s, t]) => {
+    // Read-only: the dashboard reports how much is at stake and points at the
+    // Action Center. It does not run, approve or execute anything — the agent
+    // lives in one place.
+    Promise.all([get('/api/stats'), get('/api/transactions'), get('/api/opportunities')])
+      .then(([s, t, o]) => {
         setStats(s)
         setTransactions(t)
+        setOpenOpps((o.opportunities || []).filter((x) => x.status === 'open'))
       })
       .catch((e) => setError(e.message))
       .finally(() => {
@@ -132,6 +137,16 @@ export default function Overview({ refresh, live }) {
     return total ? Math.round((pos / total) * 100) : null
   }, [stats])
 
+  const atRisk = useMemo(() => {
+    const customers = new Set()
+    let value = 0
+    for (const o of openOpps) {
+      value += o.revenue_at_risk_inr || 0
+      ;(o.customer_ids || []).forEach((c) => customers.add(c))
+    }
+    return { value, customers: customers.size, count: openOpps.length }
+  }, [openOpps])
+
   const lastMonthRevenue = useMemo(() => {
     if (!transactions?.monthly) return null
     // last month with meaningful volume (a stray attributed order can open a new month)
@@ -148,7 +163,7 @@ export default function Overview({ refresh, live }) {
   return (
     <div className="space-y-6">
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         <StatTile
           label={
             <span className="flex items-center gap-1.5">
@@ -177,7 +192,27 @@ export default function Overview({ refresh, live }) {
           sub={lastMonthRevenue ? `${lastMonthRevenue.orders} orders` : undefined}
           accent="text-emerald-400"
         />
+        <StatTile
+          label="Revenue at risk"
+          value={formatINR(atRisk.value)}
+          sub={`${atRisk.customers} customer${atRisk.customers === 1 ? '' : 's'}`}
+          accent="text-amber-400"
+        />
       </div>
+
+      {atRisk.count > 0 && (
+        <button
+          onClick={() => onNavigate?.('action')}
+          className="w-full flex items-center justify-between gap-3 bg-slate-900 border border-slate-800 hover:border-sky-400/40 rounded-xl px-4 py-3 text-left transition-colors"
+        >
+          <span className="flex items-center gap-2 text-xs text-slate-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+            <span className="font-semibold text-slate-100">{atRisk.count}</span>
+            {atRisk.count === 1 ? 'opportunity' : 'opportunities'} awaiting action
+          </span>
+          <span className="text-xs font-semibold text-sky-400">View Action Center &rarr;</span>
+        </button>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">

@@ -20,14 +20,15 @@ const TITLES = {
   audit: 'Audit Console',
 }
 
+// Each screen answers one question, in the order a merchant asks them.
 const SUBTITLES = {
-  overview: 'Review intelligence at a glance',
-  issues: 'Detected problems and growth opportunities, with evidence',
+  overview: 'What is happening — business health at a glance',
+  issues: 'Where the problems and opportunities are, with the evidence',
   reply: 'Triaged reviews awaiting a response',
   livefeedback: 'Real-time customer feedback, labeled as it arrives',
-  revenue: 'Transactions, top items, and theme-revenue association',
-  action: 'Run the agent, approve gated actions, track campaigns',
-  audit: 'Live ops trail — every tool call, policy verdict, and outcome',
+  revenue: 'Did it actually make money — transactions, top items, associations',
+  action: 'What the agent proposes, what you approve, and what it earned',
+  audit: 'Proof of exactly what happened — every call, verdict and outcome',
 }
 
 export default function App() {
@@ -218,7 +219,9 @@ export default function App() {
           <p className="mt-0.5 text-xs text-slate-400">{SUBTITLES[view]}</p>
         </header>
         <div className="flex-1 px-8 py-6">
-          {view === 'overview' && <Overview refresh={refresh} live={reviewsConnected} />}
+          {view === 'overview' && (
+            <Overview refresh={refresh} live={reviewsConnected} onNavigate={setView} />
+          )}
           {view === 'issues' && <IssuesOpportunities refresh={refresh} />}
           {view === 'reply' && <ReplyQueue refresh={refresh} bumpRefresh={bumpRefresh} />}
           {view === 'livefeedback' && (
