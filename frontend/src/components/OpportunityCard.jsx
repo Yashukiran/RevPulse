@@ -173,6 +173,9 @@ export default function OpportunityCard({ opportunity, onDecided, compact = fals
 
   const execResult = opp._executeResult
   const outcome = opp.outcome
+  // Persisted links survive a reload; execResult only exists in the session
+  // where the merchant clicked approve.
+  const paymentLinks = outcome?.links?.length ? outcome.links : execResult?.links || []
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
@@ -281,30 +284,71 @@ export default function OpportunityCard({ opportunity, onDecided, compact = fals
               <span className="font-mono text-xs text-slate-300">{execResult.offer_code}</span>
             )}
           </div>
-          {execResult?.links?.length > 0 && (
-            <ul className="mt-2 space-y-1">
-              {execResult.links.map((l, i) => {
-                const cust = lookup[l.customer_id]
-                return (
-                  <li key={i} className="flex items-center justify-between text-xs gap-2">
-                    <span className="text-slate-300 truncate">{cust?.name || `Customer #${l.customer_id}`}</span>
-                    <span className="text-slate-400 tabular-nums">{formatINR(l.amount_inr)}</span>
-                    {l.short_url ? (
-                      <a
-                        href={l.short_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sky-400 hover:text-sky-300 truncate max-w-[160px]"
-                      >
-                        {l.short_url}
-                      </a>
-                    ) : (
-                      <span className="text-slate-500">Razorpay order</span>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
+          {paymentLinks.length > 0 && (
+            <div className="mt-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1.5">
+                Razorpay objects created — one per customer, each carrying the offer code
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border border-slate-800 rounded-lg overflow-hidden">
+                  <thead className="bg-slate-950/60">
+                    <tr className="text-left text-slate-400">
+                      <th className="px-3 py-1.5 font-medium">Customer</th>
+                      <th className="px-3 py-1.5 font-medium">Amount</th>
+                      <th className="px-3 py-1.5 font-medium">Razorpay reference</th>
+                      <th className="px-3 py-1.5 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paymentLinks.map((l, i) => {
+                      const cust = lookup[l.customer_id]
+                      const isOrder = (l.razorpay_ref || '').startsWith('order_')
+                      return (
+                        <tr key={i} className="border-t border-slate-800/60">
+                          <td className="px-3 py-1.5 text-slate-300">
+                            {cust?.name || `Customer #${l.customer_id}`}
+                          </td>
+                          <td className="px-3 py-1.5 text-slate-300 tabular-nums">
+                            {formatINR(l.amount_inr)}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            {l.short_url ? (
+                              <a
+                                href={l.short_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sky-400 hover:text-sky-300 font-mono"
+                              >
+                                {l.short_url}
+                              </a>
+                            ) : (
+                              <span className="font-mono text-slate-400" title={l.razorpay_ref || ''}>
+                                {l.razorpay_ref || '—'}
+                                {isOrder && (
+                                  <span className="ml-2 text-[10px] text-slate-600">
+                                    order · payable at checkout
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <Badge tone={l.status === 'paid' ? 'emerald' : 'slate'}>
+                              {l.status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                Every reference above exists on the merchant&rsquo;s Razorpay account and can be
+                looked up there. The offer code travels in the object&rsquo;s notes, which is what
+                makes a resulting payment attributable to this opportunity rather than estimated.
+              </p>
+            </div>
           )}
           {outcome && (
             <div className="mt-3 bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-[11px] text-slate-300">

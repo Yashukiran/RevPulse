@@ -568,8 +568,13 @@ def measured(db, opp: Opportunity) -> dict:
         "incentive_inr": incentive,
         "control_group_size": len(control_ids),
         "incrementality": incrementality(db, campaign) if campaign else None,
+        # razorpay_ref lets anyone verify the object in the Razorpay dashboard —
+        # a payment link (plink_) or, once the account's link quota is spent, an
+        # order (order_). Persisted, so the card still shows them after a reload.
         "links": [{"customer_id": l.customer_id, "amount_inr": l.amount_inr,
-                   "short_url": l.short_url, "status": l.status} for l in links],
+                   "short_url": l.short_url, "status": l.status,
+                   "razorpay_ref": l.razorpay_link_id,
+                   "paid_ts": utc_iso(l.paid_ts)} for l in links],
     }
 
 
