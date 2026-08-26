@@ -146,13 +146,21 @@ def detect_peak(db, today: date | None = None) -> dict | None:
     return best
 
 
-def product_drivers(db, peak: dict, limit: int = 5) -> list[dict]:
-    """What actually sells in that window, and how much more of it than usual."""
+def product_drivers(db, peak: dict, limit: int = 5) -> dict:
+    """What actually sells in that window, and how much more of it than usual.
+
+    Both figures are rounded to whole dishes BEFORE the change is worked out, so
+    the percentage always matches the two numbers on screen. An owner should be
+    able to check the arithmetic in their head; a percentage that does not
+    follow from the numbers beside it destroys trust in everything else.
+    """
     weekday, start = peak["weekday"], peak["window_start"]
     slot_items: Counter = Counter()
     window_items: Counter = Counter()
     slot_dates: set[date] = set()
     window_dates: set[date] = set()
+    slot_orders = slot_item_count = 0
+    slot_revenue = 0
 
     for o in db.query(Order).all():
         if _window_start(o.ts.hour) != start:
@@ -166,27 +174,35 @@ def product_drivers(db, peak: dict, limit: int = 5) -> list[dict]:
             window_items[it["item"]] += it.get("qty", 1)
         if o.ts.weekday() == weekday:
             slot_dates.add(o.ts.date())
+            slot_orders += 1
+            slot_revenue += o.amount_inr
             for it in items:
+                slot_item_count += it.get("qty", 1)
                 slot_items[it["item"]] += it.get("qty", 1)
 
     if not slot_dates or not window_dates:
-        return []
+        return {"items": [], "items_per_order": 0, "avg_order_value_inr": 0}
 
     drivers = []
-    for item, total in slot_items.most_common(limit * 2):
-        expected = total / len(slot_dates)                 # per occurrence of this slot
-        normal = window_items[item] / len(window_dates)    # per normal day, same window
-        if expected < 1:
+    for item, total in slot_items.most_common(limit * 3):
+        expected = round(total / len(slot_dates))
+        typical = round(window_items[item] / len(window_dates))
+        extra = expected - typical
+        if typical < 1 or extra < 1:
             continue
-        change = ((expected - normal) / normal * 100) if normal else 0.0
         drivers.append({
             "item": item,
-            "normal": int(round(normal)),
-            "expected": int(round(expected)),
-            "change_pct": round(change, 1),
+            "typical": typical,
+            "expected": expected,
+            "extra": extra,
+            "change_pct": round((expected - typical) / typical * 100, 1),
         })
-    drivers.sort(key=lambda d: -(d["expected"] - d["normal"]))
-    return drivers[:limit]
+    drivers.sort(key=lambda d: -d["extra"])
+    return {
+        "items": drivers[:limit],
+        "items_per_order": round(slot_item_count / slot_orders, 1) if slot_orders else 0,
+        "avg_order_value_inr": round(slot_revenue / slot_orders) if slot_orders else 0,
+    }
 
 
 def service_pressure(db, peak: dict) -> dict | None:
@@ -217,7 +233,9 @@ def service_pressure(db, peak: dict) -> dict | None:
     return {
         "slot_rate": round(slot_rate * 100, 1),
         "other_rate": round(other_rate * 100, 1),
-        "relative_pct": round((slot_rate / other_rate - 1) * 100, 0),
+        # Percentage points, because "274% more" reads as a wild claim while
+        # "28 in every 100 more reviews" is what actually happened.
+        "point_difference": round((slot_rate - other_rate) * 100, 1),
         "slot_n": slot_total,
         "other_n": other_total,
     }
@@ -279,8 +297,10 @@ def _recommendation(peak: dict, drivers: list[dict], pressure: dict | None) -> s
             "normal_orders": peak["baseline_orders"],
             "extra_orders": extra,
             "uplift_pct": peak["uplift_pct"],
-            "top_products": drivers[:3],
-            "slow_service_complaints_higher_by_pct": pressure["relative_pct"] if pressure else None,
+            "top_products": [{"item": d["item"], "typical": d["typical"],
+                              "expected": d["expected"]} for d in drivers[:3]],
+            "slow_service_complaints_higher_by_points": (
+                pressure["point_difference"] if pressure else None),
         }
         msg = client.messages.create(
             model=EXPLAIN_MODEL,
@@ -305,14 +325,17 @@ def _recommendation(peak: dict, drivers: list[dict], pressure: dict | None) -> s
 
 
 def preparation_checklist(peak: dict, drivers: list[dict]) -> list[str]:
-    """Concrete, operational, deterministic — no money involved."""
+    """What to get ready. Advice only — nothing here is ordered, booked or
+    notified on the owner's behalf, so nothing here says it was."""
     extra = peak["expected_orders"] - peak["baseline_orders"]
-    items = [f"Prep extra {d['item']} (about {d['expected'] - d['normal']} more than a normal day)"
-             for d in drivers[:3] if d["expected"] > d["normal"]]
-    items.append(f"Packaging stock for roughly {extra} additional orders")
-    items.append(f"Kitchen staffing for the {peak['window_label']} window")
-    items.append("Delivery riders on standby before the window opens")
-    return items
+    items = [
+        f"Prepare about {d['extra']} extra {d['item']}"
+        for d in drivers[:3]
+    ]
+    items.append(f"Keep packaging ready for roughly {extra} additional orders")
+    items.append(f"Check kitchen capacity for the {peak['window_label']} window")
+    items.append("Check delivery capacity before the rush starts")
+    return items[:6]
 
 
 def forecast(db, today: date | None = None) -> dict | None:
@@ -320,51 +343,87 @@ def forecast(db, today: date | None = None) -> dict | None:
     peak = detect_peak(db, today)
     if not peak:
         return None
-    drivers = product_drivers(db, peak)
+
+    driver_data = product_drivers(db, peak)
+    drivers = driver_data["items"]
     pressure = service_pressure(db, peak)
+    extra_orders = peak["expected_orders"] - peak["baseline_orders"]
+
+    # Said the way an owner would say it — no baselines, no cohorts, no variance.
     evidence = [
-        f"{peak['comparable_above']} of the last {peak['comparable_total']} comparable "
-        f"{peak['day_name']}s ran busier than a normal day in this window",
-        f"Based on {peak['observations']} past {peak['day_name']}s in the "
-        f"{peak['window_label']} window",
-        f"A normal day sees about {peak['baseline_orders']} orders in this window; "
-        f"{peak['day_name']}s see about {peak['expected_orders']}",
+        f"We looked at {peak['observations']} similar {peak['day_name']} evenings."
+        if peak["window_start"] >= 17 else
+        f"We looked at {peak['observations']} similar {peak['day_name']}s.",
+        f"{peak['comparable_above']} of the last {peak['comparable_total']} "
+        f"{peak['day_name']}s were busier than usual.",
+        f"{peak['day_name']} {peak['window_label']} usually gets about "
+        f"{peak['expected_orders']} orders, against {peak['baseline_orders']} at "
+        f"this time on other days.",
     ]
     if drivers:
-        evidence.append(f"{drivers[0]['item']} accounts for the largest share of the increase")
-    if peak["trend_up"]:
-        evidence.append(f"Recent {peak['day_name']}s are trending busier still")
+        names = " and ".join(d["item"] for d in drivers[:2])
+        evidence.append(f"{names} sell the most extra during this time.")
 
     return {
         "peak": peak,
+        "extra_orders": extra_orders,
         "drivers": drivers,
+        "items_per_order": driver_data["items_per_order"],
+        "revenue_opportunity": {
+            "extra_orders": extra_orders,
+            "avg_order_value_inr": driver_data["avg_order_value_inr"],
+            "potential_inr": extra_orders * driver_data["avg_order_value_inr"],
+        },
         "service_pressure": pressure,
         "evidence": evidence,
         "recommendation": _recommendation(peak, drivers, pressure),
         "checklist": preparation_checklist(peak, drivers),
         "accuracy": backtest(db, peak),
         "method": (
-            "Forecast is the median of the most recent comparable windows in the "
-            "merchant's own order history. Accuracy below is measured by re-forecasting "
-            "past windows using only the data available before each one."
+            f"We take the last {RECENT_WINDOW} {peak['day_name']}s in your own order "
+            f"history and use the middle value, so one unusually quiet or busy day "
+            f"cannot swing the number. The accuracy below is worked out by predicting "
+            f"past {peak['day_name']}s using only what was known before each one, then "
+            f"checking against what actually happened."
         ),
     }
 
 
 def measure_plan(db, plan) -> dict:
-    """Once the planned window has passed, compare the forecast with what happened."""
-    target = datetime.fromisoformat(plan.target_date).date() \
-        if isinstance(plan.target_date, str) else plan.target_date
+    """Once the planned window has passed, compare the forecast with what
+    happened — orders and dishes both, so the next forecast has something to
+    learn from rather than a single number."""
+    target = datetime.fromisoformat(plan.target_date).date()         if isinstance(plan.target_date, str) else plan.target_date
     start = datetime.combine(target, datetime.min.time()) + timedelta(hours=plan.window_start)
     end = start + timedelta(hours=WINDOW_HOURS)
     if datetime.utcnow() < end:
-        return {"measured": False, "note": "The planned window has not finished yet."}
+        return {"measured": False, "note": "Upcoming"}
 
-    actual = db.query(Order).filter(Order.ts >= start, Order.ts < end).count()
-    accuracy = max(0.0, 1 - abs(plan.expected_orders - actual) / actual) if actual else 0.0
+    orders = db.query(Order).filter(Order.ts >= start, Order.ts < end).all()
+    actual = len(orders)
+    if not actual:
+        return {"measured": False, "note": "No orders recorded in this window"}
+
+    actual_items: Counter = Counter()
+    for o in orders:
+        try:
+            for it in json.loads(o.items_json):
+                actual_items[it["item"]] += it.get("qty", 1)
+        except Exception:
+            continue
+
+    predicted = json.loads(plan.drivers_json)
+    item_results = [{
+        "item": d["item"],
+        "forecast": d["expected"],
+        "actual": actual_items.get(d["item"], 0),
+    } for d in predicted]
+
     return {
         "measured": True,
         "forecast": plan.expected_orders,
         "actual": actual,
-        "accuracy_pct": round(accuracy * 100, 1),
+        "difference": actual - plan.expected_orders,
+        "accuracy_pct": round(max(0.0, 1 - abs(plan.expected_orders - actual) / actual) * 100, 1),
+        "items": item_results,
     }

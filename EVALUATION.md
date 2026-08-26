@@ -1,6 +1,6 @@
 # RevPulse — Evaluation Report
 
-_Behind every number below is a reproducible script (`scripts/evaluate.py`, run 2026-08-26 12:30 UTC). Failures and false positives are reported, not hidden._
+_Behind every number below is a reproducible script (`scripts/evaluate.py`, run 2026-08-26 14:02 UTC). Failures and false positives are reported, not hidden._
 
 ## 1. Insight detection (planted patterns P1–P5)
 
@@ -46,10 +46,7 @@ _Behind every number below is a reproducible script (`scripts/evaluate.py`, run 
 - Every figure above is computed in Python from the merchant's own data; the model only writes the explanation, so it cannot invent a rupee value.
 - End-to-end loop (approve → Razorpay → webhook → attribution → audit) is proven separately and repeatably by `scripts/test_agent_loop.py`.
 
-- **Behavioural detector (no reviews, no model):** surfaced **5 lapsed high-value customer(s)** from transaction history alone — e.g. Walk-in Neha Mehta 513, 13 orders roughly every 11 days, now silent for 88 days (8.0x their own rhythm)
-- Lifetime value at risk **₹41,920**, realistically recoverable **₹2,175** (one returning order each), maximum exposure **₹384** — within the per-customer cap
-- Gated before the merchant saw it: **NEEDS_APPROVAL**
-- This detector covers customers who never wrote a review, which is most of them: reviews exist for a minority, transaction behaviour for everyone.
+- **Behavioural detector:** no lapsed high-value customers right now (every qualifying customer is either still active or already holds an offer).
 
 ## 4c. Incrementality — control group
 
