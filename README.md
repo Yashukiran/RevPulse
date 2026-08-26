@@ -100,10 +100,13 @@ cd ..
 backend/.venv/Scripts/python scripts/generate_data.py
 backend/.venv/Scripts/python -m app.agent.extraction   # one-time review labeling (run from backend/)
 
-# run
+# run — on Windows, double-click start.bat (opens both servers and the dashboard)
+# or start them yourself, in two terminals:
 cd backend && .venv/Scripts/python -m uvicorn app.main:app --port 8000
 cd frontend && npm install && npm run dev              # http://localhost:5173
 ```
+
+Both must be running: the dashboard is a static front end and reads everything from the API on port 8000. If a page loads but shows no data, the API is not up.
 
 Tests: `scripts/test_policy.py` (adversarial policy cases), `scripts/test_holdout.py` (control-group split and incrementality), `scripts/test_money_chain.py` (full Razorpay chain incl. idempotency), `scripts/evaluate.py` (full harness), `scripts/test_agent.py` (agent surfaces planted insights). They build their own fixtures and restore state, so they can be re-run in any order without affecting demo data.
 
