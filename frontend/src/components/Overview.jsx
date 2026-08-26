@@ -11,10 +11,8 @@ import {
   Legend,
   Cell,
 } from 'recharts'
-import { get, post, formatINR, isIssueTheme } from '../api'
+import { get, formatINR, isIssueTheme } from '../api'
 import StatTile from './shared/StatTile'
-import OpportunityCard from './OpportunityCard'
-import Spinner from './shared/Spinner'
 
 const TOOLTIP_STYLE = {
   background: '#0f172a',
@@ -41,41 +39,6 @@ export default function Overview({ refresh, live }) {
   const [error, setError] = useState(null)
   const firstLoad = useRef(true)
 
-  const [opportunities, setOpportunities] = useState([])
-  const [oppLoading, setOppLoading] = useState(true)
-  const [scanning, setScanning] = useState(false)
-  const [scanMessage, setScanMessage] = useState(null)
-  const oppFirstLoad = useRef(true)
-
-  const loadOpportunities = () => {
-    if (oppFirstLoad.current) setOppLoading(true)
-    get('/api/opportunities')
-      .then((r) => setOpportunities(r.opportunities || []))
-      .catch(() => setOpportunities([]))
-      .finally(() => {
-        setOppLoading(false)
-        oppFirstLoad.current = false
-      })
-  }
-
-  const scanNow = () => {
-    setScanning(true)
-    setScanMessage(null)
-    post('/api/opportunities/scan')
-      .then((res) => {
-        loadOpportunities()
-        // A scan that finds nothing still reports why, so the button never
-        // looks broken when the guardrails are simply holding.
-        setScanMessage(
-          res.found > 0
-            ? { tone: 'emerald', text: `Found ${res.found} new opportunity.` }
-            : { tone: 'slate', text: res.reason || 'Scan complete — no new opportunities.' }
-        )
-      })
-      .catch((e) => setScanMessage({ tone: 'rose', text: `Scan failed: ${e.message}` }))
-      .finally(() => setScanning(false))
-  }
-
   useEffect(() => {
     // Only show the full-page loading state on first mount; a refresh bump
     // (e.g. triggered by a live review coming in) refetches quietly behind
@@ -92,22 +55,9 @@ export default function Overview({ refresh, live }) {
         setLoading(false)
         firstLoad.current = false
       })
-    loadOpportunities()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refresh])
 
-  const openOpportunity = useMemo(
-    () => opportunities.find((o) => o.status === 'open') || null,
-    [opportunities]
-  )
-  const executedOpportunities = useMemo(
-    () => opportunities.filter((o) => o.status === 'executed'),
-    [opportunities]
-  )
-  const executedRevenue = useMemo(
-    () => executedOpportunities.reduce((sum, o) => sum + (o.outcome?.revenue_inr || 0), 0),
-    [executedOpportunities]
-  )
 
   const themeBars = useMemo(() => {
     if (!stats) return []
@@ -197,57 +147,6 @@ export default function Overview({ refresh, live }) {
 
   return (
     <div className="space-y-6">
-      <section className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
-            <h3 className="text-sm font-semibold tracking-tight text-slate-200">Agent activity</h3>
-          </div>
-          <button
-            onClick={scanNow}
-            disabled={scanning}
-            className="px-3 py-1.5 rounded-lg bg-sky-500/90 hover:bg-sky-500 disabled:opacity-50 text-slate-950 text-xs font-semibold flex items-center gap-1.5"
-          >
-            {scanning && <Spinner className="border-slate-950/40 border-t-slate-950" />}
-            Scan now
-          </button>
-        </div>
-
-        {scanMessage && (
-          <p
-            className={`mt-2 text-xs ${
-              scanMessage.tone === 'emerald'
-                ? 'text-emerald-400'
-                : scanMessage.tone === 'rose'
-                  ? 'text-rose-400'
-                  : 'text-slate-400'
-            }`}
-          >
-            {scanMessage.text}
-          </p>
-        )}
-
-        <div className="mt-3">
-          {oppLoading ? (
-            <div className="flex items-center gap-2 text-slate-400 text-xs">
-              <Spinner /> Loading agent activity&hellip;
-            </div>
-          ) : openOpportunity ? (
-            <OpportunityCard opportunity={openOpportunity} onDecided={loadOpportunities} compact />
-          ) : executedOpportunities.length > 0 ? (
-            <p className="text-xs text-slate-400">
-              Agent executed {executedOpportunities.length} action
-              {executedOpportunities.length === 1 ? '' : 's'} ·{' '}
-              <span className="text-emerald-400 font-semibold">{formatINR(executedRevenue)}</span> attributed
-              — see Action Center for details.
-            </p>
-          ) : (
-            <p className="text-xs text-slate-500">
-              No open opportunities — the agent scans automatically when new feedback arrives.
-            </p>
-          )}
-        </div>
-      </section>
 
       <div className="grid grid-cols-4 gap-4">
         <StatTile
