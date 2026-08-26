@@ -72,8 +72,9 @@ Customer-protection bounds (frequency cap, dedupe) are enforced as strictly as m
 1. **Review intelligence** — what customers love/hate, theme trends, time-of-day and zone concentration
 2. **Issue & opportunity detection** — clustered recurring problems with click-through to the underlying evidence (actual reviews)
 3. **Reply queue** — reviews arrive here live, already labelled, above an urgent/important/routine triage; AI-drafted replies in 3 tones, and posting is a gated action. Receiving a review and answering it happen in one place
-4. **Revenue intelligence** — joins reviews ↔ transactions: *"customers mentioning slow service repeat at 8% vs 44% baseline (n=86 vs n=206)"* — always shown as association with sample sizes, never causation
-5. **Action agent** — recommends and, on approval, executes recovery offers and campaigns as real Razorpay test-mode payment links with unique codes → exact attribution; live audit console streams every step. Opportunities live in one place — the Action Center — so there is a single queue to work through rather than the same card in two views
+4. **Demand planning** — predicts the next busy window from order history alone, names the dishes that will drive it, shows the evidence and a back-tested accuracy figure, and produces an operational preparation plan. It spends nothing: no offer, no discount, no Razorpay object. Where complaints cluster in that window it says so as an association, never a cause
+5. **Revenue intelligence** — joins reviews ↔ transactions: *"customers mentioning slow service repeat at 8% vs 44% baseline (n=86 vs n=206)"* — always shown as association with sample sizes, never causation
+6. **Action agent** — recommends and, on approval, executes recovery offers and campaigns as real Razorpay test-mode payment links with unique codes → exact attribution; live audit console streams every step. Opportunities live in one place — the Action Center — so there is a single queue to work through rather than the same card in two views
 
 ## Evaluation
 

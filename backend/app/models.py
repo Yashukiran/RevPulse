@@ -219,3 +219,31 @@ class OfferRedemption(Base):
     campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id"))
     sent_ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     redeemed_ts: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class DemandPlan(Base):
+    """An operational preparation plan for a forecast busy window.
+
+    Deliberately carries no money: no offer, no discount, no Razorpay object.
+    The forecast is snapshotted at creation so it can be honestly compared with
+    what actually happened, rather than quietly re-forecast after the fact.
+    """
+
+    __tablename__ = "demand_plans"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    target_date: Mapped[str] = mapped_column(String(10), index=True)   # YYYY-MM-DD
+    day_name: Mapped[str] = mapped_column(String(12))
+    window_start: Mapped[int] = mapped_column(Integer)
+    window_label: Mapped[str] = mapped_column(String(20))
+
+    expected_orders: Mapped[int] = mapped_column(Integer)
+    baseline_orders: Mapped[int] = mapped_column(Integer)
+    uplift_pct: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[str] = mapped_column(String(10))
+
+    drivers_json: Mapped[str] = mapped_column(Text)
+    checklist_json: Mapped[str] = mapped_column(Text)
+    recommendation: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="planned")  # planned/measured

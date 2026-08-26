@@ -8,6 +8,9 @@ const ICONS = {
   reply: (
     <path d="M4 4h16v11H7l-3 3z" />
   ),
+  demand: (
+    <path d="M3 20V10M9 20V4M15 20v-8M21 20v-5" />
+  ),
   revenue: (
     <path d="M3 17l5-5 4 4 8-8M14 8h6v6" />
   ),
@@ -23,6 +26,7 @@ const NAV_ITEMS = [
   { key: 'overview', label: 'Overview' },
   { key: 'issues', label: 'Issues & Opportunities' },
   { key: 'reply', label: 'Reply Queue' },
+  { key: 'demand', label: 'Demand Planning' },
   { key: 'revenue', label: 'Revenue Intelligence' },
   { key: 'action', label: 'Action Center' },
   { key: 'audit', label: 'Audit Console' },

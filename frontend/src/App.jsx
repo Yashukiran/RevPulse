@@ -5,6 +5,7 @@ import ToastStack from './components/shared/Toast'
 import Overview from './components/Overview'
 import IssuesOpportunities from './components/IssuesOpportunities'
 import ReplyQueue from './components/ReplyQueue'
+import DemandPlanning from './components/DemandPlanning'
 import RevenueIntelligence from './components/RevenueIntelligence'
 import ActionCenter from './components/ActionCenter'
 import AuditConsole from './components/AuditConsole'
@@ -13,6 +14,7 @@ const TITLES = {
   overview: 'Overview',
   issues: 'Issues & Opportunities',
   reply: 'Reply Queue',
+  demand: 'Demand Planning',
   revenue: 'Revenue Intelligence',
   action: 'Action Center',
   audit: 'Audit Console',
@@ -23,6 +25,7 @@ const SUBTITLES = {
   overview: 'What is happening — business health at a glance',
   issues: 'Where the problems and opportunities are, with the evidence',
   reply: 'Reviews as they arrive, triaged and ready to answer',
+  demand: 'What is coming, what will sell, and what to prepare',
   revenue: 'Did it actually make money — transactions, top items, associations',
   action: 'What the agent proposes, what you approve, and what it earned',
   audit: 'Proof of exactly what happened — every call, verdict and outcome',
@@ -227,6 +230,7 @@ export default function App() {
               reviewsConnected={reviewsConnected}
             />
           )}
+          {view === 'demand' && <DemandPlanning refresh={refresh} />}
           {view === 'revenue' && <RevenueIntelligence refresh={refresh} />}
           {view === 'action' && (
             <ActionCenter

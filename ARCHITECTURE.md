@@ -64,6 +64,16 @@ The verdict shown at scan time is a preview, never an authorisation. When the me
 
 Proven end to end, repeatably, by `scripts/test_agent_loop.py`: detect → evidence → bounded maths → gate → approval → real Razorpay object → webhook → attribution → audit trail.
 
+## Demand planning — `backend/app/demand.py`
+
+A second, deliberately different capability. The win-back agent recovers customers by spending money; this one protects revenue by preparing operations, and it creates no offer, no payment link and no Razorpay object at all. Not every agent action should become a transaction.
+
+The forecast is the median of the most recent comparable windows in the merchant's own history — interpretable on purpose, so the evidence shown to the merchant ("13 of the last 14 Fridays ran busier") is the actual basis of the number rather than a story told about a model. Confidence comes from how many comparable occurrences exist and how consistently they ran above a normal day.
+
+Accuracy is measured by walk-forward backtest: each of the last few windows is re-forecast using only the data available before it, then compared with what happened. That gives an honest accuracy figure without waiting for the future to arrive.
+
+The model is called exactly once, on finished numbers, to turn them into a sentence an owner would say out loud — and the result is cached per forecast. It never produces a figure.
+
 ## Components
 
 ### Agent loop — `backend/app/agent/loop.py`

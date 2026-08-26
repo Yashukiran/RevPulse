@@ -11,6 +11,7 @@ from . import audit  # noqa: E402
 from .db import Base, engine, ensure_columns  # noqa: E402
 from .routers.actions_api import router as actions_router  # noqa: E402
 from .routers.api import router as api_router  # noqa: E402
+from .routers.demand_api import router as demand_router  # noqa: E402
 from .routers.opportunities_api import router as opportunities_router  # noqa: E402
 
 app = FastAPI(title="RevPulse API", version="0.1.0")
@@ -29,6 +30,7 @@ ensure_columns()
 app.include_router(api_router)
 app.include_router(actions_router)
 app.include_router(opportunities_router)
+app.include_router(demand_router)
 
 
 @app.on_event("startup")
