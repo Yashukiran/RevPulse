@@ -71,7 +71,7 @@ Customer-protection bounds (frequency cap, dedupe) are enforced as strictly as m
 0. **The growth agent (the product)** — scans transaction *behaviour* (the primary signal, available for 100% of customers) and feedback *language* (the enrichment layer, which explains why) unprompted, raises opportunities with evidence, money maths and a policy verdict already attached, executes on approval, and measures the result. It rescans automatically when new feedback carries a churn signal.
 1. **Review intelligence** — what customers love/hate, theme trends, time-of-day and zone concentration
 2. **Issue & opportunity detection** — clustered recurring problems with click-through to the underlying evidence (actual reviews)
-3. **Reply queue** — urgent/important/routine triage, AI-drafted replies in 3 tones; posting is a gated action
+3. **Reply queue** — reviews arrive here live, already labelled, above an urgent/important/routine triage; AI-drafted replies in 3 tones, and posting is a gated action. Receiving a review and answering it happen in one place
 4. **Revenue intelligence** — joins reviews ↔ transactions: *"customers mentioning slow service repeat at 8% vs 44% baseline (n=86 vs n=206)"* — always shown as association with sample sizes, never causation
 5. **Action agent** — recommends and, on approval, executes recovery offers and campaigns as real Razorpay test-mode payment links with unique codes → exact attribution; live audit console streams every step. Opportunities live in one place — the Action Center — so there is a single queue to work through rather than the same card in two views
 

@@ -5,7 +5,6 @@ import ToastStack from './components/shared/Toast'
 import Overview from './components/Overview'
 import IssuesOpportunities from './components/IssuesOpportunities'
 import ReplyQueue from './components/ReplyQueue'
-import LiveFeedback from './components/LiveFeedback'
 import RevenueIntelligence from './components/RevenueIntelligence'
 import ActionCenter from './components/ActionCenter'
 import AuditConsole from './components/AuditConsole'
@@ -14,7 +13,6 @@ const TITLES = {
   overview: 'Overview',
   issues: 'Issues & Opportunities',
   reply: 'Reply Queue',
-  livefeedback: 'Live Feedback',
   revenue: 'Revenue Intelligence',
   action: 'Action Center',
   audit: 'Audit Console',
@@ -24,8 +22,7 @@ const TITLES = {
 const SUBTITLES = {
   overview: 'What is happening — business health at a glance',
   issues: 'Where the problems and opportunities are, with the evidence',
-  reply: 'Triaged reviews awaiting a response',
-  livefeedback: 'Real-time customer feedback, labeled as it arrives',
+  reply: 'Reviews as they arrive, triaged and ready to answer',
   revenue: 'Did it actually make money — transactions, top items, associations',
   action: 'What the agent proposes, what you approve, and what it earned',
   audit: 'Proof of exactly what happened — every call, verdict and outcome',
@@ -89,7 +86,7 @@ export default function App() {
 
   // Single WebSocket for live review submissions: bumps the shared refresh
   // counter so Overview/Issues/Reply Queue quietly refetch, toasts the
-  // merchant, and hands the raw event down to Live Feedback's stream.
+  // merchant, and hands the raw event down to the reply queue.
   useEffect(() => {
     let mounted = true
     let ws = null
@@ -223,9 +220,12 @@ export default function App() {
             <Overview refresh={refresh} live={reviewsConnected} onNavigate={setView} />
           )}
           {view === 'issues' && <IssuesOpportunities refresh={refresh} />}
-          {view === 'reply' && <ReplyQueue refresh={refresh} bumpRefresh={bumpRefresh} />}
-          {view === 'livefeedback' && (
-            <LiveFeedback incomingReview={incomingReview} reviewsConnected={reviewsConnected} />
+          {view === 'reply' && (
+            <ReplyQueue
+              refresh={refresh}
+              incomingReview={incomingReview}
+              reviewsConnected={reviewsConnected}
+            />
           )}
           {view === 'revenue' && <RevenueIntelligence refresh={refresh} />}
           {view === 'action' && (
