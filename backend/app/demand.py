@@ -296,7 +296,7 @@ def _recommendation(peak: dict, drivers: list[dict], pressure: dict | None) -> s
             model=EXPLAIN_MODEL,
             max_tokens=260,
             messages=[{"role": "user", "content": (
-                "You advise the owner of Biryani House, a Bengaluru restaurant. These "
+                "You advise the owner of The Nandana Palace, a Bengaluru restaurant. These "
                 "figures were calculated from their own order history:\n\n"
                 f"{json.dumps(facts, indent=2)}\n\n"
                 "Write 2-3 short sentences telling the owner what is coming and what to "

@@ -64,7 +64,7 @@ export default function Sidebar({ active, onSelect, merchantName, merchantCity }
           <h1 className="text-lg font-semibold tracking-tight text-slate-100">RevPulse</h1>
         </div>
         <p className="mt-1 text-xs text-slate-400 truncate">
-          {merchantName || 'Biryani House'}
+          {merchantName || 'The Nandana Palace'}
           {merchantCity ? ` · ${merchantCity}` : ''}
         </p>
       </div>

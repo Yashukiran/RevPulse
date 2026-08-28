@@ -39,7 +39,7 @@ Two rules make this defensible rather than a demo trick:
 1. **Every rupee figure is computed in Python from the merchant's own data.** The model writes the explanation and never the arithmetic, so it cannot invent a number.
 2. **The four money figures are kept distinct, and none of them oversells.** Lifetime value at risk is what these customers have already spent — context for how much the relationship is worth, not money the offer can recover. Realistically recoverable is what one returning order from each is worth. Expected recovered is a projection with its assumption printed beside it. Maximum exposure is exact: what the offer costs if every customer redeems.
 
-Built for the Razorpay AI Buildathon, Track 01 (AI Growth & Agentic Commerce). Demo merchant: *Biryani House*, a fictional Bengaluru delivery restaurant.
+Built for the Razorpay AI Buildathon, Track 01 (AI Growth & Agentic Commerce). Demo merchant: *The Nandana Palace*, a Bengaluru delivery restaurant. All customers, orders and reviews are synthetic and seeded — see Data below.
 
 ## The core safety principle
 

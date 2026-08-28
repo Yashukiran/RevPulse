@@ -1,7 +1,7 @@
 # RevPulse — Architecture
 
 ```
-                        MERCHANT (Biryani House)
+                        MERCHANT (The Nandana Palace)
                                 │
               ┌─────────────────┴──────────────────┐
               ▼                                    ▼

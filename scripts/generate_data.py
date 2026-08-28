@@ -1,4 +1,4 @@
-"""Synthetic data generator for RevPulse demo merchant "Biryani House".
+"""Synthetic data generator for RevPulse demo merchant "The Nandana Palace".
 
 Deterministic (fixed seed). Creates ~300 customers, 8 months of orders and
 ~800 first-party reviews with planted ground-truth patterns P1-P5 plus two
@@ -177,7 +177,7 @@ def main() -> None:
     Base.metadata.create_all(engine)
     db = SessionLocal()
 
-    merchant = m.Merchant(name="Biryani House", city="Bengaluru", category="Restaurant / Delivery")
+    merchant = m.Merchant(name="The Nandana Palace", city="Bengaluru", category="Restaurant / Delivery")
     db.add(merchant)
     db.flush()
     for name, cat, price in MENU:

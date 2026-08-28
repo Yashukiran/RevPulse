@@ -366,9 +366,9 @@ def draft_reply(db, review_id: int, tone: str, **_) -> dict:
         messages=[{
             "role": "user",
             "content": (
-                f"You reply to customer reviews for Biryani House, a Bengaluru restaurant. "
+                f"You reply to customer reviews for The Nandana Palace, a Bengaluru restaurant. "
                 f"Tone: {tone}. Max 3 sentences, specific to their feedback, no fake promises, "
-                f"sign off as 'Team Biryani House'.\n\nReview ({r.rating}/5): {r.text}\n\n"
+                f"sign off as 'Team Nandana Palace'.\n\nReview ({r.rating}/5): {r.text}\n\n"
                 f"Reply with only the reply text."
             ),
         }],

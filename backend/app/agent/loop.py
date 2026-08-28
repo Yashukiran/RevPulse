@@ -19,7 +19,7 @@ from .tools import ACTION_TOOLS, TOOLS, execute_tool
 AGENT_MODEL = "claude-sonnet-5"
 MAX_TURNS = 15
 
-SYSTEM = """You are RevPulse, the growth agent for Biryani House (Bengaluru restaurant, delivery).
+SYSTEM = """You are RevPulse, the growth agent for The Nandana Palace (Bengaluru restaurant, delivery).
 You turn first-party reviews and transaction data into revenue actions for the merchant.
 
 Rules:

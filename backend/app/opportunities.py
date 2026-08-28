@@ -360,7 +360,7 @@ def _explain(candidate: dict) -> str:
             model=EXPLAIN_MODEL,
             max_tokens=320,
             messages=[{"role": "user", "content": (
-                "You are the growth agent for Biryani House, a Bengaluru delivery "
+                "You are the growth agent for The Nandana Palace, a Bengaluru delivery "
                 "restaurant. Below is a revenue opportunity you detected, with figures "
                 "already computed from the merchant's transaction data.\n\n"
                 f"{json.dumps(facts, indent=2)}\n\n"

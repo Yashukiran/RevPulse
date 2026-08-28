@@ -133,7 +133,7 @@ def _make_links(db, campaign: Campaign, customer_ids: list[int], discount_pct: f
         try:
             link = _create_link(
                 amount_inr=amount,
-                description=f"{campaign.offer_desc} — Biryani House (code {campaign.offer_code})",
+                description=f"{campaign.offer_desc} — The Nandana Palace (code {campaign.offer_code})",
                 customer_name=cust.name, customer_email=cust.email, customer_phone=cust.phone,
                 reference_id=key,
                 notes={"campaign_id": campaign.id, "offer_code": campaign.offer_code,
@@ -242,7 +242,7 @@ def create_payment_link(db, args: dict) -> dict:
                 "amount_inr": existing.amount_inr, "reused": True}
     amount = int(args["amount_inr"])
     link = _create_link(
-        amount_inr=amount, description="Biryani House order",
+        amount_inr=amount, description="The Nandana Palace order",
         customer_name=cust.name, customer_email=cust.email, customer_phone=cust.phone,
         reference_id=key,
         notes={"customer_id": cid, "offer_code": args.get("offer_code", "")},
