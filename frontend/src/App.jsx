@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { get, post, wsURL } from './api'
+import { get, post, wsURL, onApiWaking } from './api'
 import Sidebar from './components/shared/Sidebar'
 import ToastStack from './components/shared/Toast'
 import Overview from './components/Overview'
@@ -39,6 +39,11 @@ export default function App() {
   const [reviewsConnected, setReviewsConnected] = useState(false)
   const [incomingReview, setIncomingReview] = useState(null)
   const [toasts, setToasts] = useState([])
+
+  // True while the API is being woken from idle. Shown as a banner so a cold
+  // start reads as "starting up" rather than "the dashboard is broken".
+  const [apiWaking, setApiWaking] = useState(false)
+  useEffect(() => onApiWaking(setApiWaking), [])
 
   // The agent run lives here, not inside Action Center, so switching views
   // mid-run neither cancels it nor throws away the answer.
@@ -218,6 +223,13 @@ export default function App() {
           <h2 className="text-xl font-semibold tracking-tight text-slate-100">{TITLES[view]}</h2>
           <p className="mt-0.5 text-xs text-slate-400">{SUBTITLES[view]}</p>
         </header>
+        {apiWaking && (
+          <div className="mx-8 mt-4 flex items-center gap-2.5 rounded-lg border border-amber-400/40 bg-amber-400/10 px-4 py-2.5 text-xs text-amber-300">
+            <span className="pulse-dot h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+            Starting the API — free hosting suspends it when idle. This takes up to a
+            minute the first time; the page fills in on its own.
+          </div>
+        )}
         <div className="flex-1 px-8 py-6">
           {view === 'overview' && (
             <Overview refresh={refresh} live={reviewsConnected} onNavigate={setView} />

@@ -41,12 +41,12 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     envVars:
-      # Render supplies the API's hostname; api.js adds the scheme.
+      # Set explicitly, NOT via fromService/property: host — that returns the
+      # bare service name ("revpulse-api") rather than the full hostname, which
+      # bakes an unresolvable URL into the bundle and breaks every request.
+      # vite.config.js fails the build if this value is ever malformed again.
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: revpulse-api
-          property: host
+        value: https://revpulse-api.onrender.com
     routes:
       # Single-page app: every path must serve index.html.
       - type: rewrite
