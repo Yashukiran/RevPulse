@@ -7,11 +7,11 @@ and each was computing them from scratch on every request: 43,909 rows read and
 ten seconds of pure CPU for numbers that had not changed.
 
 So the pass happens once and the result is reused until the order table
-actually changes. `_fingerprint` is the guard: row count plus highest id, which
-one cheap query answers. Any write that adds an order — a campaign payment
-attributed by the webhook, a review submitted through the feedback form — moves
-the fingerprint and the next read recomputes. Nothing stale can survive a write,
-which is why this is a cache rather than a snapshot.
+actually changes. `_fingerprint` is the guard, and it has to stay far cheaper
+than the work it protects, so it is a single MAX(id) lookup. Any write that adds
+an order — a campaign payment attributed by the webhook, a review submitted
+through the feedback form — raises it and the next read recomputes. Nothing
+stale can survive a write, which is why this is a cache rather than a snapshot.
 
 The arithmetic here is deliberately identical to the code it replaced; only the
 number of times it runs has changed.
@@ -62,14 +62,23 @@ class OrderAggregates:
         self.slot_item_count: Counter = Counter()  # (weekday, window) -> plates
 
 
-def _fingerprint(db) -> tuple[int, int]:
-    """Cheap identity for the order table: (row count, highest id)."""
-    n, top = db.query(func.count(Order.id), func.max(Order.id)).one()
-    return int(n or 0), int(top or 0)
+def _fingerprint(db) -> int:
+    """Cheap identity for the order table: the highest id.
+
+    Deliberately not COUNT(*) — SQLite has no stored row count, so counting
+    scans the table, and on a small instance with a cold page cache that scan
+    cost seconds on every request: the guard became more expensive than the work
+    it was protecting. MAX(id) is a single lookup at the end of the rowid index.
+
+    Every order is inserted, so an addition always raises this. Removing the
+    newest rows lowers it. An in-place edit of an existing order would not move
+    it, which nothing does — and `invalidate()` covers that case explicitly.
+    """
+    return int(db.query(func.max(Order.id)).scalar() or 0)
 
 
 _cached: OrderAggregates | None = None
-_cached_for: tuple[int, int] | None = None
+_cached_for: int | None = None
 
 
 def build(db) -> OrderAggregates:
