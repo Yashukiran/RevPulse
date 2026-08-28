@@ -16,6 +16,9 @@ dist/
 # Database
 *.db
 *.sqlite3
+# ...except the demo database. The review labelling inside it was paid for once
+# and cached in DB columns, so a deploy must ship it rather than regenerate it.
+!backend/revpulse.db
 
 # OS / editor / local tooling
 .DS_Store

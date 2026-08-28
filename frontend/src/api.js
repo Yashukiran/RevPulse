@@ -1,4 +1,7 @@
-export const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+// Render supplies the API service's bare hostname, so add the scheme when one
+// is missing. Locally VITE_API_URL is unset and we fall back to the dev API.
+const RAW = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+export const API = /^https?:\/\//.test(RAW) ? RAW : `https://${RAW}`
 
 async function handle(res) {
   if (!res.ok) {

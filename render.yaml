@@ -1,11 +1,29 @@
+# Deploys both halves of RevPulse on Render.
+#
+# The database is committed (backend/revpulse.db) rather than generated at build
+# time. That is deliberate: the review labelling was paid for once and cached in
+# DB columns, so regenerating on every deploy would both cost money and wipe the
+# walk-in order volume that demand forecasting needs. A judge therefore gets the
+# same data the demo runs on.
+#
+# Render's disk is ephemeral, so anything created on the live site (campaigns,
+# opportunities) resets to this known-good state on the next deploy. For a
+# judged demo that is a feature, not a limitation.
+
 services:
+  # ---------------------------------------------------------------- API
   - type: web
     name: revpulse-api
     runtime: python
+    plan: free
     rootDir: backend
-    buildCommand: pip install -r requirements.txt && python ../scripts/generate_data.py
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      # sync: false = "ask me in the dashboard, never store this in the repo"
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
@@ -14,5 +32,23 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: PYTHON_VERSION
-        value: "3.12.7"
+
+  # ---------------------------------------------------------------- dashboard
+  - type: web
+    name: revpulse-dashboard
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      # Render supplies the API's hostname; api.js adds the scheme.
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: revpulse-api
+          property: host
+    routes:
+      # Single-page app: every path must serve index.html.
+      - type: rewrite
+        source: /*
+        destination: /index.html
