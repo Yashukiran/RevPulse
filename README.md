@@ -73,7 +73,7 @@ Customer-protection bounds (frequency cap, dedupe) are enforced as strictly as m
 2. **Issue & opportunity detection** — clustered recurring problems with click-through to the underlying evidence (actual reviews)
 3. **Reply queue** — reviews arrive here live, already labelled, above an urgent/important/routine triage; AI-drafted replies in 3 tones, and posting is a gated action. Receiving a review and answering it happen in one place
 4. **Demand planning** — predicts the next busy window from order history alone (*Friday 6–8 PM: 96 orders against a typical 52*), names the dishes that will drive it with quantities the owner can verify by eye, shows the evidence and a back-tested accuracy figure, states the sales opportunity, and produces a preparation plan. It spends nothing and claims nothing: no offer, no Razorpay object, and it recommends rather than acts. Where complaints cluster in that window it says so in percentage points, as an association, never a cause
-5. **Revenue intelligence** — joins reviews ↔ transactions: *"customers mentioning slow service repeat at 8% vs 44% baseline (n=86 vs n=206)"* — always shown as association with sample sizes, never causation
+5. **Revenue intelligence** — joins reviews ↔ transactions: *"customers mentioning slow service repeat at 8% vs 44% baseline (n=88 vs n=208)"* — always shown as association with sample sizes, never causation
 6. **Action agent** — recommends and, on approval, executes recovery offers and campaigns as real Razorpay test-mode payment links with unique codes → exact attribution; live audit console streams every step. Opportunities live in one place — the Action Center — so there is a single queue to work through rather than the same card in two views
 
 ## Evaluation
@@ -98,6 +98,8 @@ cp ../.env.example .env                            # then fill in your keys
 # data (seeded, deterministic)
 cd ..
 backend/.venv/Scripts/python scripts/generate_data.py
+backend/.venv/Scripts/python scripts/add_order_volume.py   # walk-in order volume;
+                                                          # demand planning needs it
 backend/.venv/Scripts/python -m app.agent.extraction   # one-time review labeling (run from backend/)
 
 # run — on Windows, double-click start.bat (opens both servers and the dashboard)
@@ -116,7 +118,7 @@ Demo prep: `scripts/reset_demo.py` clears campaigns and the audit trail while ke
 
 ## Data — the honest story
 
-There is no external dataset. `scripts/generate_data.py` (seeded RNG, committed) creates ~300 customers, 8 months of orders, and ~785 reviews with planted, answer-keyed patterns — plus decoys that must *not* be flagged. Everything money-shaped (orders, payment links, payments, webhooks) goes through the actual Razorpay test-mode API.
+There is no external dataset. Two committed, seeded scripts build it. `scripts/generate_data.py` creates 300 reviewing customers and ~789 reviews with planted, answer-keyed patterns — plus decoys that must *not* be flagged. `scripts/add_order_volume.py` then adds 900 walk-in customers who never review, bringing the business to 43,909 orders over 8 months with a real restaurant's shape: quiet Mondays, heavy Friday and Saturday evenings, and a different menu mix at the weekend rush. Both are seeded, so the whole dataset is reproducible byte for byte. Everything money-shaped (orders, payment links, payments, webhooks) goes through the actual Razorpay test-mode API.
 
 **Where do reviews come from in production?** First-party feedback collected at the payment moment: after each successful Razorpay payment the customer gets a feedback link tied to that transaction. That links every review to a customer and an order by construction — which is what makes review↔revenue joins possible at all (public platform reviews are anonymous and unmatchable).
 
@@ -125,7 +127,8 @@ There is no external dataset. `scripts/generate_data.py` (seeded RNG, committed)
 The short version is below; [DEFENSE.md](DEFENSE.md) states the limits in full — cannibalisation, cold start, why a restaurant is the demo rather than the best vertical, when a discount is the wrong intervention, messaging compliance, and what breaks at scale.
 
 - Synthetic, seeded data (patterns are planted; the answer key is committed)
-- Single merchant, demo login only
+- Single merchant, and **no authentication at all** — the dashboard is open. Fine for a
+  local demo; it is the first thing production would need
 - Campaign customer responses are **simulated** and labeled as such everywhere
 - Review labeling quality is bounded by the extraction model
 - Associations are never presented as causation
