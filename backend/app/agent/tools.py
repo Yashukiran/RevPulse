@@ -14,6 +14,7 @@ from datetime import timedelta
 
 from sqlalchemy import func
 
+from .. import aggregates
 from ..db import SessionLocal
 from ..models import Campaign, Customer, Order, PaymentLink, Review
 
@@ -281,18 +282,11 @@ def get_customer_history(db, customer_id: int, **_) -> dict:
 
 
 def get_transactions(db, compare_theme=None, **_) -> dict:
-    # Three columns as tuples, not 43,909 ORM objects. Same arithmetic, a
-    # fraction of the work: object hydration dominated this call.
-    monthly: dict[str, dict] = defaultdict(lambda: {"revenue_inr": 0, "orders": 0})
-    item_rev: Counter = Counter()
-    for ts, amount_inr, items_json in db.query(
-        Order.ts, Order.amount_inr, Order.items_json
-    ).all():
-        mkey = ts.strftime("%Y-%m")
-        monthly[mkey]["revenue_inr"] += amount_inr
-        monthly[mkey]["orders"] += 1
-        for it in json.loads(items_json):
-            item_rev[it["item"]] += it["qty"] * it["price_inr"]
+    # Read the shared single-pass aggregate rather than re-scanning and
+    # re-parsing every basket on each request.
+    agg = aggregates.build(db)
+    monthly = agg.monthly
+    item_rev = agg.item_revenue
     result = {
         "monthly": dict(sorted(monthly.items())),
         "top_items_by_revenue": dict(item_rev.most_common(10)),

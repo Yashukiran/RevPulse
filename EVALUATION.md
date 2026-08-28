@@ -1,6 +1,6 @@
 # RevPulse — Evaluation Report
 
-_Behind every number below is a reproducible script (`scripts/evaluate.py`, run 2026-08-28 13:09 UTC). Failures and false positives are reported, not hidden._
+_Behind every number below is a reproducible script (`scripts/evaluate.py`, run 2026-08-28 13:15 UTC). Failures and false positives are reported, not hidden._
 
 ## 1. Insight detection (planted patterns P1–P5)
 

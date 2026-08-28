@@ -22,6 +22,7 @@ import os
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 
+from . import aggregates
 from .models import Order, Review
 
 # Two-hour service windows. Kept coarse on purpose: a kitchen prepares for
@@ -67,15 +68,8 @@ def _slot_history(db) -> tuple[dict, dict]:
     to {date: order_count}. The second is the "a normal day in this window"
     baseline, taken across every weekday.
     """
-    per_slot: dict[tuple[int, int], dict[date, int]] = defaultdict(lambda: defaultdict(int))
-    per_window: dict[int, dict[date, int]] = defaultdict(lambda: defaultdict(int))
-    # Only the timestamp is needed here, so read that column rather than
-    # hydrating an Order object per row.
-    for (ts,) in db.query(Order.ts).all():
-        start = _window_start(ts.hour)
-        per_slot[(ts.weekday(), start)][ts.date()] += 1
-        per_window[start][ts.date()] += 1
-    return per_slot, per_window
+    agg = aggregates.build(db)
+    return agg.slot_dates, agg.window_dates
 
 
 def _next_occurrence(weekday: int, window_start: int, today: date) -> date:
@@ -158,32 +152,18 @@ def product_drivers(db, peak: dict, limit: int = 5) -> dict:
     follow from the numbers beside it destroys trust in everything else.
     """
     weekday, start = peak["weekday"], peak["window_start"]
-    slot_items: Counter = Counter()
-    window_items: Counter = Counter()
-    slot_dates: set[date] = set()
-    window_dates: set[date] = set()
-    slot_orders = slot_item_count = 0
-    slot_revenue = 0
+    slot = (weekday, start)
 
-    for ts, items_json, amount_inr in db.query(
-        Order.ts, Order.items_json, Order.amount_inr
-    ).all():
-        if _window_start(ts.hour) != start:
-            continue
-        try:
-            items = json.loads(items_json)
-        except Exception:
-            continue
-        window_dates.add(ts.date())
-        for it in items:
-            window_items[it["item"]] += it.get("qty", 1)
-        if ts.weekday() == weekday:
-            slot_dates.add(ts.date())
-            slot_orders += 1
-            slot_revenue += amount_inr
-            for it in items:
-                slot_item_count += it.get("qty", 1)
-                slot_items[it["item"]] += it.get("qty", 1)
+    # All of this comes from the shared single-pass aggregate; the arithmetic
+    # below is unchanged, it just no longer re-reads and re-parses every order.
+    agg = aggregates.build(db)
+    slot_items: Counter = agg.slot_items[slot]
+    window_items: Counter = agg.window_items[start]
+    slot_dates: set[date] = agg.basket_slot_days[slot]
+    window_dates: set[date] = agg.basket_window_days[start]
+    slot_orders = agg.slot_orders[slot]
+    slot_item_count = agg.slot_item_count[slot]
+    slot_revenue = agg.slot_revenue[slot]
 
     if not slot_dates or not window_dates:
         return {"items": [], "items_per_order": 0, "avg_order_value_inr": 0}
