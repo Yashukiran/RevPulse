@@ -1,6 +1,6 @@
 # RevPulse — Evaluation Report
 
-_Behind every number below is a reproducible script (`scripts/evaluate.py`, run 2026-08-26 14:02 UTC). Failures and false positives are reported, not hidden._
+_Behind every number below is a reproducible script (`scripts/evaluate.py`, run 2026-08-28 13:09 UTC). Failures and false positives are reported, not hidden._
 
 ## 1. Insight detection (planted patterns P1–P5)
 
@@ -39,14 +39,13 @@ _Behind every number below is a reproducible script (`scripts/evaluate.py`, run 
 
 ## 4b. Autonomous opportunity loop (detect → propose → gate)
 
-- Unprompted scan surfaced **3 at-risk customer(s)**, 3/3 of them the planted high-LTV churn cohort
-- Revenue at risk quantified from transactions: **₹79,090**
-- Maximum financial exposure: **₹409** — within the ₹300/customer cap
-- Proposed action gated before the merchant saw it: **NEEDS_APPROVAL** (agent-initiated: proposals the agent raises on its own always require merchant approval)
-- Every figure above is computed in Python from the merchant's own data; the model only writes the explanation, so it cannot invent a rupee value.
+- No open opportunity at scan time (all at-risk customers already have a live offer — the frequency cap is doing its job).
 - End-to-end loop (approve → Razorpay → webhook → attribution → audit) is proven separately and repeatably by `scripts/test_agent_loop.py`.
 
-- **Behavioural detector:** no lapsed high-value customers right now (every qualifying customer is either still active or already holds an offer).
+- **Behavioural detector (no reviews, no model):** surfaced **1 lapsed high-value customer(s)** from transaction history alone — e.g. Manish Pillai, 6 orders roughly every 25 days, now silent for 76 days (3.0x their own rhythm)
+- Lifetime value at risk **₹5,540**, realistically recoverable **₹785** (one returning order each), maximum exposure **₹138** — within the per-customer cap
+- Gated before the merchant saw it: **NEEDS_APPROVAL**
+- This detector covers customers who never wrote a review, which is most of them: reviews exist for a minority, transaction behaviour for everyone.
 
 ## 4c. Incrementality — control group
 

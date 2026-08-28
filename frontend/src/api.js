@@ -97,8 +97,30 @@ async function request(path, init) {
   )
 }
 
+// Switching tabs refetched everything from scratch, so returning to a screen
+// paid the full round trip again. Reads are held briefly and served from
+// memory; any write clears the whole cache, so an approval, a rejection, a
+// scan or a new review can never leave a stale figure on screen.
+const CACHE_TTL_MS = 30_000
+const cache = new Map()
+
+const copy = (v) =>
+  typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v))
+
 export function get(path) {
-  return request(path, undefined)
+  const hit = cache.get(path)
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
+    // Hand back a copy: callers sort and reshape what they receive, and that
+    // must not edit what the next reader sees.
+    return hit.promise.then(copy)
+  }
+  const promise = request(path, undefined)
+  cache.set(path, { at: Date.now(), promise })
+  // A failed read must not be remembered as the answer.
+  promise.catch(() => {
+    if (cache.get(path)?.promise === promise) cache.delete(path)
+  })
+  return promise.then(copy)
 }
 
 export function post(path, body) {
@@ -106,7 +128,12 @@ export function post(path, body) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body || {}),
-  })
+  }).finally(() => cache.clear())
+}
+
+/** Drop cached reads — used when a live event says the data moved. */
+export function invalidate() {
+  cache.clear()
 }
 
 export function wsURL(path) {

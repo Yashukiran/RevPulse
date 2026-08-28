@@ -69,10 +69,12 @@ def _slot_history(db) -> tuple[dict, dict]:
     """
     per_slot: dict[tuple[int, int], dict[date, int]] = defaultdict(lambda: defaultdict(int))
     per_window: dict[int, dict[date, int]] = defaultdict(lambda: defaultdict(int))
-    for o in db.query(Order).all():
-        start = _window_start(o.ts.hour)
-        per_slot[(o.ts.weekday(), start)][o.ts.date()] += 1
-        per_window[start][o.ts.date()] += 1
+    # Only the timestamp is needed here, so read that column rather than
+    # hydrating an Order object per row.
+    for (ts,) in db.query(Order.ts).all():
+        start = _window_start(ts.hour)
+        per_slot[(ts.weekday(), start)][ts.date()] += 1
+        per_window[start][ts.date()] += 1
     return per_slot, per_window
 
 
@@ -92,10 +94,11 @@ def _confidence(observations: int, consistency: float) -> str:
     return "Low"
 
 
-def detect_peak(db, today: date | None = None) -> dict | None:
+def detect_peak(db, today: date | None = None,
+                slot_history: tuple | None = None) -> dict | None:
     """Find the upcoming window where demand reliably runs above a normal day."""
     today = today or datetime.utcnow().date()
-    per_slot, per_window = _slot_history(db)
+    per_slot, per_window = slot_history if slot_history else _slot_history(db)
     if not per_slot:
         return None
 
@@ -162,20 +165,22 @@ def product_drivers(db, peak: dict, limit: int = 5) -> dict:
     slot_orders = slot_item_count = 0
     slot_revenue = 0
 
-    for o in db.query(Order).all():
-        if _window_start(o.ts.hour) != start:
+    for ts, items_json, amount_inr in db.query(
+        Order.ts, Order.items_json, Order.amount_inr
+    ).all():
+        if _window_start(ts.hour) != start:
             continue
         try:
-            items = json.loads(o.items_json)
+            items = json.loads(items_json)
         except Exception:
             continue
-        window_dates.add(o.ts.date())
+        window_dates.add(ts.date())
         for it in items:
             window_items[it["item"]] += it.get("qty", 1)
-        if o.ts.weekday() == weekday:
-            slot_dates.add(o.ts.date())
+        if ts.weekday() == weekday:
+            slot_dates.add(ts.date())
             slot_orders += 1
-            slot_revenue += o.amount_inr
+            slot_revenue += amount_inr
             for it in items:
                 slot_item_count += it.get("qty", 1)
                 slot_items[it["item"]] += it.get("qty", 1)
@@ -213,10 +218,10 @@ def service_pressure(db, peak: dict) -> dict | None:
     """
     weekday, start = peak["weekday"], peak["window_start"]
     slot_total = slot_slow = other_total = other_slow = 0
-    for r in db.query(Review).all():
-        themes = json.loads(r.themes_json) if r.themes_json else []
+    for ts, themes_json in db.query(Review.ts, Review.themes_json).all():
+        themes = json.loads(themes_json) if themes_json else []
         slow = "slow delivery/service" in themes
-        in_slot = r.ts.weekday() == weekday and _window_start(r.ts.hour) == start
+        in_slot = ts.weekday() == weekday and _window_start(ts.hour) == start
         if in_slot:
             slot_total += 1
             slot_slow += slow
@@ -241,11 +246,16 @@ def service_pressure(db, peak: dict) -> dict | None:
     }
 
 
-def backtest(db, peak: dict, rounds: int = 4) -> dict | None:
+def backtest(db, peak: dict, rounds: int = 4, per_slot: dict | None = None) -> dict | None:
     """Walk forward through history: for each of the last few occurrences,
     forecast it using only what was known before, then compare with what
-    happened. Honest accuracy without waiting for the future to arrive."""
-    per_slot, per_window = _slot_history(db)
+    happened. Honest accuracy without waiting for the future to arrive.
+
+    `per_slot` lets the caller pass the slot history it already computed, so a
+    full forecast reads the order table once instead of twice.
+    """
+    if per_slot is None:
+        per_slot, _ = _slot_history(db)
     dated = sorted(per_slot[(peak["weekday"], peak["window_start"])].items())
     if len(dated) < MIN_OBSERVATIONS + rounds:
         return None
@@ -340,7 +350,9 @@ def preparation_checklist(peak: dict, drivers: list[dict]) -> list[str]:
 
 def forecast(db, today: date | None = None) -> dict | None:
     """The whole Demand Planning page, in one payload."""
-    peak = detect_peak(db, today)
+    # Read the slot history once and share it with both consumers below.
+    history = _slot_history(db)
+    peak = detect_peak(db, today, slot_history=history)
     if not peak:
         return None
 
@@ -378,7 +390,7 @@ def forecast(db, today: date | None = None) -> dict | None:
         "evidence": evidence,
         "recommendation": _recommendation(peak, drivers, pressure),
         "checklist": preparation_checklist(peak, drivers),
-        "accuracy": backtest(db, peak),
+        "accuracy": backtest(db, peak, per_slot=history[0]),
         "method": (
             f"We take the last {RECENT_WINDOW} {peak['day_name']}s in your own order "
             f"history and use the middle value, so one unusually quiet or busy day "

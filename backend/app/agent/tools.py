@@ -160,24 +160,35 @@ def _themes(r: Review) -> list[str]:
 
 
 def get_review_stats(db, **_) -> dict:
-    reviews = db.query(Review).all()
-    by_rating = Counter(r.rating for r in reviews)
-    by_sentiment = Counter(r.sentiment or "unextracted" for r in reviews)
+    # Read the five columns this needs as plain tuples rather than hydrating
+    # full Review objects, and resolve zones from one customer query. Touching
+    # r.customer per review lazy-loaded a row each time — 789 extra round trips
+    # for a function that only ever needed the zone string.
+    rows = db.query(
+        Review.ts, Review.rating, Review.sentiment, Review.themes_json,
+        Review.customer_id,
+    ).all()
+    zone_of = dict(db.query(Customer.id, Customer.zone).all())
+
+    by_rating = Counter(r.rating for r in rows)
+    by_sentiment = Counter(r.sentiment or "unextracted" for r in rows)
     theme_total: Counter = Counter()
     theme_month: dict[str, Counter] = defaultdict(Counter)
     theme_dow_evening: dict[str, Counter] = defaultdict(Counter)
     theme_zone: dict[str, Counter] = defaultdict(Counter)
-    for r in reviews:
-        month = r.ts.strftime("%Y-%m")
-        slot = f"{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][r.ts.weekday()]} {'7-10PM' if 19 <= r.ts.hour <= 22 else 'other'}"
-        for t in _themes(r):
+    DAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
+    for ts, _rating, _sentiment, themes_json, customer_id in rows:
+        month = ts.strftime("%Y-%m")
+        slot = f"{DAYS[ts.weekday()]} {'7-10PM' if 19 <= ts.hour <= 22 else 'other'}"
+        zone = zone_of.get(customer_id)
+        for t in json.loads(themes_json) if themes_json else ():
             theme_total[t] += 1
             theme_month[t][month] += 1
             theme_dow_evening[t][slot] += 1
-            if r.customer and r.customer.zone:
-                theme_zone[t][r.customer.zone] += 1
+            if zone:
+                theme_zone[t][zone] += 1
     return {
-        "total_reviews": len(reviews),
+        "total_reviews": len(rows),
         "rating_distribution": dict(by_rating),
         "sentiment_distribution": dict(by_sentiment),
         "theme_counts": dict(theme_total.most_common()),
@@ -270,14 +281,17 @@ def get_customer_history(db, customer_id: int, **_) -> dict:
 
 
 def get_transactions(db, compare_theme=None, **_) -> dict:
-    orders = db.query(Order).all()
+    # Three columns as tuples, not 43,909 ORM objects. Same arithmetic, a
+    # fraction of the work: object hydration dominated this call.
     monthly: dict[str, dict] = defaultdict(lambda: {"revenue_inr": 0, "orders": 0})
     item_rev: Counter = Counter()
-    for o in orders:
-        mkey = o.ts.strftime("%Y-%m")
-        monthly[mkey]["revenue_inr"] += o.amount_inr
+    for ts, amount_inr, items_json in db.query(
+        Order.ts, Order.amount_inr, Order.items_json
+    ).all():
+        mkey = ts.strftime("%Y-%m")
+        monthly[mkey]["revenue_inr"] += amount_inr
         monthly[mkey]["orders"] += 1
-        for it in json.loads(o.items_json):
+        for it in json.loads(items_json):
             item_rev[it["item"]] += it["qty"] * it["price_inr"]
     result = {
         "monthly": dict(sorted(monthly.items())),
@@ -292,14 +306,25 @@ def get_transactions(db, compare_theme=None, **_) -> dict:
             (theme_cust if compare_theme in _themes(r) else other_cust).add(r.customer_id)
         other_cust -= theme_cust
 
+        # One pass over the order timestamps of everyone who reviewed, instead
+        # of a COUNT query per customer. Same definition of "repeated": at
+        # least one order inside the 45-day window after their latest review.
+        reviewer_ids = theme_cust | other_cust
+        repeated: set[int] = set()
+        if reviewer_ids:
+            for cid, ts in db.query(Order.customer_id, Order.ts).filter(
+                Order.customer_id.in_(reviewer_ids)
+            ).all():
+                if cid in repeated:
+                    continue
+                rv_ts = latest_review[cid].ts
+                if rv_ts < ts <= rv_ts + WINDOW:
+                    repeated.add(cid)
+
         def repeat_rate(ids: set[int]) -> float:
-            hits = 0
-            for cid in ids:
-                rv = latest_review[cid]
-                hits += db.query(Order).filter(
-                    Order.customer_id == cid, Order.ts > rv.ts, Order.ts <= rv.ts + WINDOW
-                ).count() > 0
-            return round(hits / len(ids), 3) if ids else 0.0
+            if not ids:
+                return 0.0
+            return round(len(ids & repeated) / len(ids), 3)
 
         result["repeat_purchase_comparison"] = {
             "theme": compare_theme,

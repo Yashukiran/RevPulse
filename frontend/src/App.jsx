@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { get, post, wsURL, onApiWaking } from './api'
+import { get, post, wsURL, onApiWaking, invalidate } from './api'
 import Sidebar from './components/shared/Sidebar'
 import ToastStack from './components/shared/Toast'
 import Overview from './components/Overview'
@@ -56,7 +56,12 @@ export default function App() {
   })
   const runningRef = useRef(false)
 
-  const bumpRefresh = useCallback(() => setRefresh((n) => n + 1), [])
+  // Every refresh trigger — a live review, a found opportunity, a finished
+  // agent run — means the cached reads are out of date, so drop them first.
+  const bumpRefresh = useCallback(() => {
+    invalidate()
+    setRefresh((n) => n + 1)
+  }, [])
 
   const setAgentMessage = useCallback((message) => {
     setAgentRun((s) => ({ ...s, message }))
