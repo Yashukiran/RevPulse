@@ -1,8 +1,22 @@
 # RevPulse — AI Growth Agent for Merchants
 
-Businesses collect hundreds of reviews and almost none of that information ever becomes action. RevPulse reads a merchant's first-party reviews and Razorpay transaction data, finds what is costing them money, and turns it into revenue actions — recovery offers, win-back campaigns, one-click review replies — **with every money action explainable, bounded, gated, and audited.**
+**Finds the customers a business is quietly losing, prices what winning them back is worth, and — once the owner approves — sends each one a real Razorpay offer, then proves how much money came back.**
 
-The agent is the product, not a chatbot bolted onto a dashboard. Nobody asks it anything: it scans on its own, surfaces an opportunity with the evidence behind it, states what the action is worth and the most it can cost, and waits for the merchant to approve.
+**[▶ Live demo](https://revpulse-dashboard.onrender.com)** · Razorpay AI Buildathon, Track 01 · *first load takes ~50s while the free tier wakes*
+
+---
+
+Every business loses regulars silently. Nobody notices that a customer who ordered every 9 days has now been gone for 76. That silence is unbilled revenue, and no dashboard surfaces it, because nobody has time to cross-reference 1,200 customers against 43,000 orders and 789 reviews.
+
+**RevPulse does it unprompted.** It scans on startup, and again the moment new feedback signals churn. Two independent detectors: **transaction behaviour** — a regular silent for more than 3× their *own* ordering rhythm — and **their own words**, a review saying they are leaving. Behaviour is primary, because reviews exist for a minority of customers and payment history exists for all of them.
+
+For each customer found it computes four separate figures: what the relationship has been worth, what one returning order would realistically recover, a projection with its assumption printed beside it, and the **exact maximum** the offer can cost. Then it stops.
+
+**Money only moves when a human clicks approve.** On approval it creates one Razorpay object and one unique offer code *per customer*, so an arriving payment maps back to that campaign **by construction, not by estimate**. Roughly 30% of larger segments are deliberately sent nothing, so lift is measured against a control group instead of asserted.
+
+**Where the AI is — and where it deliberately is not.** Claude labels review text and writes the merchant-facing explanation. Every rupee figure is arithmetic in Python, and the policy engine gating every money action is deterministic code with no model in it. The LLM can *ask* for anything; it can never *do* anything.
+
+**Proven, not claimed** — `scripts/evaluate.py` regenerates this on demand, failures included: **5/5** planted patterns detected · **0/2** decoys falsely flagged · **100/100** policy verdicts correct · **0** unauthorised money actions.
 
 ## The autonomous loop
 
