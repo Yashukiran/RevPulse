@@ -305,15 +305,23 @@ flowchart TD
 
 Customer-protection bounds are enforced as strictly as money bounds.
 
-### Why SQLite, and what changes at scale
+### Can this scale? It's using SQLite.
 
-SQLite is the default **so the project can be cloned and run with no database to provision** — that reproducibility is the reason for the choice, not a belief that it scales.
+**SQLite is a deliberate default for the hackathon, because it gives a judge zero database setup** — clone the repo and the product runs immediately. It is *not* the production scaling choice.
 
-The schema is engine-agnostic and this is checkable rather than asserted: every column type in `models.py` is portable, the application issues **no raw SQL**, and the whole codebase has exactly two engine-dependent lines, both isolated in `db.py`. Point `DATABASE_URL` at Postgres and the schema compiles straight to `SERIAL` / `TIMESTAMP` / `VARCHAR` DDL — pooling switches on, and the SQLite-only column-widening helper no-ops in favour of Alembic.
+**For production the answer is PostgreSQL**, because RevPulse has a highly relational model: customers, orders, campaigns, payment links and redemptions are all connected — **sixteen foreign keys across thirteen tables** — and some operations need **atomic multi-table transactions**. Creating a recovery offer writes to `campaigns`, `payment_links`, `offer_redemptions` and `budget_spend`, and those must all commit or none: a partial commit means an offer sent with no budget recorded, and the daily cap silently stops working.
 
-**Postgres, not a document store** — the data model decides it. Sixteen foreign keys across thirteen tables: the review-to-revenue join *is* the product, and attribution is `orders.campaign_id`. Denormalising lifetime value into several places inside a payments product is not a trade worth making, and `create_recovery_offer()` writes four tables that must all commit or none.
+That relational shape is also why a document store is the wrong answer. The review-to-revenue join *is* the product, and attribution is a foreign key (`orders.campaign_id`) rather than an inference.
 
-**But the database is not the first bottleneck.** Only `customers` and `menu_items` carry a `merchant_id`, so **multi-tenancy is the real blocker** — every table needs one, with row-level security so isolation is the database's job rather than something to remember. After that: the aggregate cache in `aggregates.py` is per-process and becomes materialised views, and review extraction becomes a queue worker. Postgres removes the single-writer lock and lets multiple API instances run; it is necessary, not sufficient.
+**The database layer goes through SQLAlchemy, so the application is not tightly coupled to SQLite** — and that is checkable rather than promised. Every column type in `models.py` is portable, the app issues **no raw SQL**, and exactly **two lines** in the whole codebase depend on the engine, both isolated in `db.py`. Point `DATABASE_URL` at Postgres and the schema compiles straight to `SERIAL` / `TIMESTAMP` / `VARCHAR` DDL, connection pooling switches on, and the SQLite-only column-widening helper no-ops in favour of Alembic.
+
+**The next scaling steps are not just changing the database, though.** In order:
+
+1. **Enforce merchant-level multi-tenancy.** Today only `customers` and `menu_items` carry a `merchant_id`. Every table needs one, with row-level security so isolation is the database's job rather than something to remember on every query.
+2. **Move aggregate caching out of process.** `aggregates.py` holds the whole business in one worker's memory; four workers means four copies and four rebuilds. These become materialised, incrementally-updated views.
+3. **Make AI and review processing asynchronous.** Extraction is currently a synchronous batched pass. At volume it belongs in a queue with workers.
+
+**Then PostgreSQL gives the concurrent, transactional foundation** those three need in order to run across multiple API instances. It removes the single-writer lock — necessary, but on its own not sufficient.
 
 ### Built with
 
