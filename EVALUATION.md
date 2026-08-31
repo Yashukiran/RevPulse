@@ -4,7 +4,7 @@ _Behind every number below is a reproducible script (`scripts/evaluate.py`, run 
 
 ## 1. Insight detection (planted patterns P1–P5)
 
-- **P1 slow-service cluster**: DETECTED — monthly counts [4, 6, 8, 10, 13, 17, 30], top time slot “Fri 7-10PM”
+- **P1 slow-service cluster**: DETECTED— monthly counts [4, 6, 8, 10, 13, 17, 30], top time slot “Fri 7-10PM”
 - **P2 hero product (biryani)**: DETECTED — praised in 302/432 positive reviews (70%; planted 70%)
 - **P3 high-LTV churn risks**: DETECTED — 3/3 planted customers found, 0 false positives at the LTV>₹15k threshold
 - **P4 packaging↔zone**: DETECTED — 28/35 complaints in Whitefield (80%; planted 80% in Whitefield)

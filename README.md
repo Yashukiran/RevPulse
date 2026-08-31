@@ -10,7 +10,7 @@ One of those spends money and is gated behind a human. The other spends nothing 
 
 <sub>Works for any business where a payment carries a customer identity — D2C brands, subscriptions, clinics, services, delivery. The demo is a restaurant because it is the easiest to picture.</sub>
 
-**[▶ Live demo](https://revpulse-dashboard.onrender.com)** · [Architecture](ARCHITECTURE.md) · [Evaluation](EVALUATION.md) · [Limits &amp; trade-offs](DEFENSE.md)
+**[▶ Live demo](https://revpulse-dashboard.onrender.com)** · [Architecture](ARCHITECTURE.md) · [Evaluation](EVALUATION.md) · [AI judgment, failures &amp; limits](DEFENSE.md)
 
 <sub>Razorpay AI Buildathon · Track 01, AI Growth & Agentic Commerce · <i>first load takes ~50s while the free tier wakes</i></sub>
 
@@ -273,7 +273,7 @@ There is no external dataset. Two committed, seeded scripts build it, so the who
 
 ## What isn't built
 
-[DEFENSE.md](DEFENSE.md) states the limits in full, before anyone else has to. The short version:
+[DEFENSE.md](DEFENSE.md) covers three things a system that moves money should be able to say about itself: **where a model was deliberately not used and why**, **what broke while building it and what I did about it** (eight failures, each traceable to a commit), and the limits below in full. The short version:
 
 - **Synthetic, seeded data.** No real merchant has used this.
 - **Customer payments are simulated** — but through the *same handler* the real webhook calls.
