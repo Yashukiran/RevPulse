@@ -4,9 +4,11 @@
 
 ### Your best customers leave quietly. Your busiest Friday arrives without warning. RevPulse sees both coming.
 
-An AI growth agent for merchants. It watches payments and feedback, then does two things: **wins back the regulars who have gone silent** — working out what each one is worth and sending the offer through Razorpay once the owner approves — and **tells the kitchen what is about to hit them**, like *96 orders this Friday 6–8 PM against a normal 52, so prepare 17 more mutton biryanis.*
+An AI growth agent for merchants. It watches payments and feedback, then does two things: **wins back the customers who have gone silent** — working out what each one is worth and sending the offer through Razorpay once the owner approves — and **warns you before your busiest window arrives**, like *96 orders this Friday 6–8 PM against a normal 52, so plan for 44 more than usual.*
 
 One of those spends money and is gated behind a human. The other spends nothing at all.
+
+<sub>Works for any business where a payment carries a customer identity — D2C brands, subscriptions, clinics, services, delivery. The demo is a restaurant because it is the easiest to picture.</sub>
 
 **[▶ Live demo](https://revpulse-dashboard.onrender.com)** · [Architecture](ARCHITECTURE.md) · [Evaluation](EVALUATION.md) · [What's wrong with it](DEFENSE.md)
 
@@ -24,13 +26,15 @@ One of those spends money and is gated behind a human. The other spends nothing 
 
 ## The problem
 
-A restaurant does 5,000 orders a month. One regular used to order every nine days. He hasn't ordered in seventy-six.
+Take a delivery restaurant — easiest to picture, and the demo runs on one. It does 5,000 orders a month. One regular used to order every nine days. He hasn't ordered in seventy-six.
 
 **Nobody notices.** There is no alert for a customer who simply stops. The owner is cooking, and finding that one person means cross-referencing 1,200 customers against 43,000 orders and 789 reviews — so it never happens. The money leaks out quietly, one regular at a time.
 
 Meanwhile, this Friday between 6 and 8 PM, **nearly twice a normal evening's orders are going to arrive.** It happens most Fridays. The owner half-knows it, but nobody has told them *how many*, or *which dishes*, or *how much extra to prep* — so the kitchen runs late, the reviews say "waited 70 minutes", and some of those customers become next month's silent regulars.
 
 **Two leaks, in opposite directions.** One loses customers you already had. The other turns away customers standing right in front of you. RevPulse closes both.
+
+**And neither problem is about food.** A D2C brand has subscribers who quietly stop reordering, and a Monday-morning despatch peak. A clinic has patients who stop booking, and a Saturday that is always overbooked. A SaaS product has accounts going dormant, and renewal weeks that swamp support. **Wherever a payment carries a customer identity, both leaks exist** — the detection rules read order history, not menus. Only the words on the screen change per vertical.
 
 ## What it does
 
@@ -69,11 +73,13 @@ About 30% of a larger segment is deliberately sent **nothing**. Their return rat
 
 ---
 
-### B · Telling the kitchen what is about to hit them
+### B · Warning you before the busiest window arrives
 
 This half **spends nothing**. No offer, no payment link, no Razorpay object at all — and that is deliberate. Not every useful thing an agent does should become a transaction.
 
-It reads the order history and finds the window that reliably runs busier than a normal day. Right now, for the demo merchant:
+It reads the order history and finds the window that reliably runs busier than a normal day, then names **which line items** will drive it. For the demo restaurant that means dishes; for a D2C brand it would be SKUs, for a clinic appointment types — the code groups whatever is in the basket, it knows nothing about food.
+
+Right now, for the demo merchant:
 
 > **Friday 6–8 PM · 04 Sept · Very likely**
 > **96** orders expected · typical for that window: **52** · that is **+44 orders (+83.7% busier)**
@@ -86,7 +92,7 @@ It reads the order history and finds the window that reliably runs busier than a
 >
 > *"Prepare about 17 extra Mutton Dum Biryani · keep packaging ready for roughly 44 additional orders · check delivery capacity before the rush starts."*
 
-**Why the dish-level numbers are the useful part.** The Friday rush has a *different menu mix* — Seekh Kebab rises 175% while total orders rise 84%. The forecaster discovers that rather than being told, which is why the advice is "prepare 17 more mutton biryanis" instead of a useless "prepare more of everything".
+**Why the line-item numbers are the useful part.** The Friday rush has a *different product mix* — Seekh Kebab rises 175% while total orders rise only 84%. The forecaster discovers that from the data rather than being told, which is why the advice is "prepare 17 more of this specific item" instead of a useless "get ready for more of everything". Any business with a busy window has the same asymmetry: the peak is not just bigger, it is *shaped differently*.
 
 **And it does not overclaim.** The forecast is the median of the last 8 comparable Fridays, so it is explainable rather than a black box. Accuracy is **85.5%**, measured by re-forecasting past Fridays using only the data available before each one. Where slow-service complaints cluster in that window it says so in *percentage points* and calls it an association, never a cause. The button saves a preparation plan and says so — nothing is ordered, booked or charged.
 
