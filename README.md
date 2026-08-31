@@ -2,9 +2,11 @@
 
 # RevPulse
 
-### Your best customers leave quietly. RevPulse finds them, and wins them back.
+### Your best customers leave quietly. Your busiest Friday arrives without warning. RevPulse sees both coming.
 
-An AI growth agent for merchants — it watches payments and feedback, spots the regulars who have gone silent, works out exactly what winning them back is worth, and sends the offer through Razorpay once the owner says yes.
+An AI growth agent for merchants. It watches payments and feedback, then does two things: **wins back the regulars who have gone silent** — working out what each one is worth and sending the offer through Razorpay once the owner approves — and **tells the kitchen what is about to hit them**, like *96 orders this Friday 6–8 PM against a normal 52, so prepare 17 more mutton biryanis.*
+
+One of those spends money and is gated behind a human. The other spends nothing at all.
 
 **[▶ Live demo](https://revpulse-dashboard.onrender.com)** · [Architecture](ARCHITECTURE.md) · [Evaluation](EVALUATION.md) · [What's wrong with it](DEFENSE.md)
 
@@ -26,7 +28,9 @@ A restaurant does 5,000 orders a month. One regular used to order every nine day
 
 **Nobody notices.** There is no alert for a customer who simply stops. The owner is cooking, and finding that one person means cross-referencing 1,200 customers against 43,000 orders and 789 reviews — so it never happens. The money leaks out quietly, one regular at a time.
 
-That is the gap RevPulse closes.
+Meanwhile, this Friday between 6 and 8 PM, **nearly twice a normal evening's orders are going to arrive.** It happens most Fridays. The owner half-knows it, but nobody has told them *how many*, or *which dishes*, or *how much extra to prep* — so the kitchen runs late, the reviews say "waited 70 minutes", and some of those customers become next month's silent regulars.
+
+**Two leaks, in opposite directions.** One loses customers you already had. The other turns away customers standing right in front of you. RevPulse closes both.
 
 ## What it does
 
@@ -35,6 +39,12 @@ That is the gap RevPulse closes.
 Then it stops and waits. **Money only moves when a human clicks approve.**
 
 ## How it actually grows revenue
+
+Two capabilities. The first recovers money you have lost; the second protects money you are about to lose.
+
+---
+
+### A · Winning back the customers who left
 
 Four steps, and each one is a number you can check:
 
@@ -57,7 +67,28 @@ Each customer gets **their own Razorpay object and their own offer code**. So wh
 **4 · It proves whether it worked.**
 About 30% of a larger segment is deliberately sent **nothing**. Their return rate is compared with the customers who got the offer, so lift is *measured against a control group* rather than asserted. Attribution proves the payment came through you; only a holdout speaks to whether you caused it.
 
-> There is also a second capability that grows revenue **without spending anything**: demand planning predicts the next busy window from order history alone — *Friday 6–8 PM, 96 orders against a typical 52* — and names the dishes to prepare. No offer, no payment link, no Razorpay object. Not every useful agent action should become a transaction.
+---
+
+### B · Telling the kitchen what is about to hit them
+
+This half **spends nothing**. No offer, no payment link, no Razorpay object at all — and that is deliberate. Not every useful thing an agent does should become a transaction.
+
+It reads the order history and finds the window that reliably runs busier than a normal day. Right now, for the demo merchant:
+
+> **Friday 6–8 PM · 04 Sept · Very likely**
+> **96** orders expected · typical for that window: **52** · that is **+44 orders (+83.7% busier)**
+>
+> | Dish | Typical | Expected | Prepare extra |
+> |---|---:|---:|---:|
+> | Mutton Dum Biryani | 14 | 31 | **+17** |
+> | Hyderabadi Chicken Biryani | 17 | 31 | **+14** |
+> | Seekh Kebab | 8 | 22 | **+14** |
+>
+> *"Prepare about 17 extra Mutton Dum Biryani · keep packaging ready for roughly 44 additional orders · check delivery capacity before the rush starts."*
+
+**Why the dish-level numbers are the useful part.** The Friday rush has a *different menu mix* — Seekh Kebab rises 175% while total orders rise 84%. The forecaster discovers that rather than being told, which is why the advice is "prepare 17 more mutton biryanis" instead of a useless "prepare more of everything".
+
+**And it does not overclaim.** The forecast is the median of the last 8 comparable Fridays, so it is explainable rather than a black box. Accuracy is **85.5%**, measured by re-forecasting past Fridays using only the data available before each one. Where slow-service complaints cluster in that window it says so in *percentage points* and calls it an association, never a cause. The button saves a preparation plan and says so — nothing is ordered, booked or charged.
 
 ## Features
 
@@ -71,6 +102,20 @@ About 30% of a larger segment is deliberately sent **nothing**. Their return rat
 - ✅ **Review intelligence** — themes, trends, time and zone concentration, with click-through to the actual reviews
 - ✅ **Reply queue** — feedback arrives live, already labelled and triaged; AI drafts in 3 tones, posting is gated
 - ✅ **Evaluation harness** — scores itself against planted ground truth and writes down its own failures
+
+## The seven screens — what each one is for
+
+Open the **[live demo](https://revpulse-dashboard.onrender.com)** and follow along; this is the order the sidebar is in, and it is the order an owner actually asks the questions.
+
+| Screen | The question it answers | What you see |
+|---|---|---|
+| **Overview** | *What is happening?* | Business health in five tiles — 789 reviews, 55% positive, 3.66★, last month's revenue, and how much is at stake right now. Four charts behind them. Deliberately **read-only**: it counts opportunities and points at the Action Center rather than letting you act in two places. |
+| **Issues & Opportunities** | *Where are the problems?* | Four issue cards with a monthly sparkline, the peak time slot and the worst delivery zone. **Click one and it opens the actual customer reviews** — the evidence, not a summary of the evidence. |
+| **Reply Queue** | *Who needs answering?* | Reviews as they arrive, already labelled and sorted into urgent / important / routine. AI drafts a reply in three tones — but **posting is a gated action**, because words leaving the building are an external action. The customer-facing feedback form lives here too, so receiving and answering happen in one place. |
+| **Demand Planning** | *What is coming?* | The Friday forecast above: expected vs typical orders, the dish table, the evidence behind it, the back-tested accuracy, and a preparation checklist. **Spends nothing.** |
+| **Revenue Intelligence** | *Did it make money?* | Monthly revenue, top items by revenue, and the join between reviews and payments — *customers mentioning slow service reorder at 8% (n=88) vs 44% for everyone else (n=208)*. Both sample sizes always on screen, always labelled association rather than cause. |
+| **Action Center** | *What should I approve?* | **The one queue.** Every opportunity the agent found, with its evidence, four money figures and policy verdict. Approve or reject. Below that: pending approvals, and campaign results with revenue attributed and incentive actually spent. |
+| **Audit Console** | *What exactly happened?* | Every call the agent made, live over WebSocket — time, actor, tool, verdict, the rule that fired, the Razorpay reference. Filter to **Blocked** to see a refusal, or **Money actions** to see a payment attributed back to the opportunity that caused it. |
 
 ## How it works
 
