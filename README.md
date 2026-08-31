@@ -305,6 +305,16 @@ flowchart TD
 
 Customer-protection bounds are enforced as strictly as money bounds.
 
+### Why SQLite, and what changes at scale
+
+SQLite is the default **so the project can be cloned and run with no database to provision** — that reproducibility is the reason for the choice, not a belief that it scales.
+
+The schema is engine-agnostic and this is checkable rather than asserted: every column type in `models.py` is portable, the application issues **no raw SQL**, and the whole codebase has exactly two engine-dependent lines, both isolated in `db.py`. Point `DATABASE_URL` at Postgres and the schema compiles straight to `SERIAL` / `TIMESTAMP` / `VARCHAR` DDL — pooling switches on, and the SQLite-only column-widening helper no-ops in favour of Alembic.
+
+**Postgres, not a document store** — the data model decides it. Sixteen foreign keys across thirteen tables: the review-to-revenue join *is* the product, and attribution is `orders.campaign_id`. Denormalising lifetime value into several places inside a payments product is not a trade worth making, and `create_recovery_offer()` writes four tables that must all commit or none.
+
+**But the database is not the first bottleneck.** Only `customers` and `menu_items` carry a `merchant_id`, so **multi-tenancy is the real blocker** — every table needs one, with row-level security so isolation is the database's job rather than something to remember. After that: the aggregate cache in `aggregates.py` is per-process and becomes materialised views, and review extraction becomes a queue worker. Postgres removes the single-writer lock and lets multiple API instances run; it is necessary, not sufficient.
+
 ### Built with
 
 | | |

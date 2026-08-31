@@ -14,7 +14,25 @@ DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BACKEND_DIR / 'revpulse.db
 if DATABASE_URL.startswith("sqlite:///./"):
     DATABASE_URL = f"sqlite:///{BACKEND_DIR / DATABASE_URL.removeprefix('sqlite:///./')}"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+IS_SQLITE = DATABASE_URL.startswith("sqlite")
+
+# SQLite is the default so the project can be cloned and run with no database to
+# provision — that reproducibility is the whole reason for the choice, not a
+# belief that it scales. Nothing here is SQLite-specific: every column type in
+# models.py is portable and the app issues no raw SQL, so pointing DATABASE_URL
+# at Postgres is the only change required.
+#
+#   DATABASE_URL=postgresql+psycopg2://user:pass@host:5432/revpulse
+#
+# The two settings below are the only engine-dependent lines in the codebase.
+if IS_SQLITE:
+    # SQLite refuses cross-thread use by default; a web server needs it lifted.
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    # A networked database wants pooling and dead-connection detection instead.
+    engine = create_engine(
+        DATABASE_URL, pool_size=10, max_overflow=20, pool_pre_ping=True,
+    )
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
@@ -43,12 +61,21 @@ def get_db():
 
 
 def ensure_columns() -> None:
-    """Add columns introduced after a database was first created.
+    """Add columns introduced after this database was first created.
 
-    The review extraction cached in this database was paid for, so the schema is
-    widened in place rather than recreated. SQLite only supports ADD COLUMN,
-    which is all these changes need.
+    The review extraction cached in the committed SQLite file was paid for once,
+    so the schema is widened in place rather than recreated. SQLite only supports
+    ADD COLUMN, which is all these changes need.
+
+    Deliberately a no-op on any other engine. This is a fifteen-line stand-in for
+    a migration tool, justified only by not wanting to re-pay for extraction on a
+    single-file demo database. A Postgres deployment should run Alembic instead —
+    reading the live schema and generating reversible migrations — rather than
+    trust a hand-maintained list of columns.
     """
+    if not IS_SQLITE:
+        return
+
     from sqlalchemy import text
 
     wanted = {
