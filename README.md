@@ -12,211 +12,193 @@ One of those spends money and is gated behind a human. The other spends nothing 
 
 **[▶ Live demo](https://revpulse-dashboard.onrender.com)** · [Architecture](ARCHITECTURE.md) · [Evaluation](EVALUATION.md) · [AI judgment, failures &amp; limits](DEFENSE.md)
 
-<sub>Razorpay AI Buildathon · Track 01, AI Growth & Agentic Commerce · <i>first load takes ~50s while the free tier wakes</i></sub>
+<sub>Razorpay AI Buildathon · Track 01, AI Growth &amp; Agentic Commerce · <i>first load takes ~50s while the free tier wakes</i></sub>
 
 </div>
 
-<!-- ─────────────────────────────────────────────────────────────────────
-     SCREENSHOT SLOT — add a dashboard screenshot here and uncomment:
-     ![The Action Center](docs/screenshot-action-center.png)
-     Save PNGs into docs/ and reference them relatively.
-     ───────────────────────────────────────────────────────────────────── -->
+<!-- ═══════════════════════════════════════════════════════════════════════
+     HERO SCREENSHOT — take one of the Action Center with an opportunity card
+     expanded (the four money boxes + the Razorpay table are the best shot),
+     save it as docs/action-center.png, then delete this comment and uncomment:
+
+![RevPulse Action Center](docs/action-center.png)
+
+     ═══════════════════════════════════════════════════════════════════════ -->
 
 ---
 
-## The problem
+## 1 · The problem
 
 Take a delivery restaurant — easiest to picture, and the demo runs on one. It does 5,000 orders a month. One regular used to order every nine days. He hasn't ordered in seventy-six.
 
 **Nobody notices.** There is no alert for a customer who simply stops. The owner is cooking, and finding that one person means cross-referencing 1,200 customers against 43,000 orders and 789 reviews — so it never happens. The money leaks out quietly, one regular at a time.
 
-Meanwhile, this Friday between 6 and 8 PM, **nearly twice a normal evening's orders are going to arrive.** It happens most Fridays. The owner half-knows it, but nobody has told them *how many*, or *which dishes*, or *how much extra to prep* — so the kitchen runs late, the reviews say "waited 70 minutes", and some of those customers become next month's silent regulars.
+Meanwhile, this Friday between 6 and 8 PM, **nearly twice a normal evening's orders are going to arrive.** It happens most Fridays. The owner half-knows it, but nobody has told them *how many*, or *which items*, or *how much extra to prepare* — so the kitchen runs late, the reviews say "waited 70 minutes", and some of those customers become next month's silent regulars.
 
-**Two leaks, in opposite directions.** One loses customers you already had. The other turns away customers standing right in front of you. RevPulse closes both.
+**Two leaks, in opposite directions.** One loses customers you already had. The other turns away customers standing right in front of you.
 
-**And neither problem is about food.** A D2C brand has subscribers who quietly stop reordering, and a Monday-morning despatch peak. A clinic has patients who stop booking, and a Saturday that is always overbooked. A SaaS product has accounts going dormant, and renewal weeks that swamp support. **Wherever a payment carries a customer identity, both leaks exist** — the detection rules read order history, not menus. Only the words on the screen change per vertical.
+**And neither problem is about food.** A D2C brand has subscribers who quietly stop reordering, and a Monday-morning despatch peak. A clinic has patients who stop booking, and a Saturday that is always overbooked. A SaaS product has accounts going dormant, and renewal weeks that swamp support. **Wherever a payment carries a customer identity, both leaks exist** — the detection rules read order history, not menus.
 
-## What it does
+## 2 · The solution
 
-**Nobody asks it anything.** It scans on startup, and again the moment a new review signals someone is unhappy. When it finds a customer worth saving it writes up a card — the evidence, what the relationship is worth, what an offer can realistically recover, and the most that offer could cost — and puts it on the owner's desk.
+An agent that watches the merchant's own payment and feedback data and closes both leaks — **without ever being asked, and without ever spending money on its own authority.**
 
-Then it stops and waits. **Money only moves when a human clicks approve.**
+| | The leak | What RevPulse does | Spends money? |
+|---|---|---|---|
+| **A** | Customers leaving unnoticed | Finds them, prices the recovery, sends a Razorpay offer **once the owner approves**, then measures whether it worked | Yes — so it is bounded, gated and audited |
+| **B** | Demand arriving unprepared | Predicts the next busy window and the exact items that will drive it, so the business can staff and stock for it | **No.** No offer, no payment link, no Razorpay object at all |
 
-## How it actually grows revenue
+The second one matters as much as the first: **not every useful thing an agent does should become a transaction.**
 
-Two capabilities. The first recovers money you have lost; the second protects money you are about to lose.
+## 3 · How RevPulse works
 
----
+Seven stages. Every one of them is recorded before it happens.
 
-### A · Winning back the customers who left
+```
+DETECT      two independent signals, deliberately not one
+            · BEHAVIOUR — a valuable regular silent for far longer than their
+              own ordering rhythm (transactions only; no review needed)
+            · WORDS — a high-value customer's review says they are leaving
+                 ↓
+QUANTIFY    four separate money figures, all computed in Python
+                 ↓
+GATE        deterministic policy engine — ALLOWED / NEEDS_APPROVAL / BLOCKED
+                 ↓
+APPROVE     the human gate. Nothing moves without it
+                 ↓
+EXECUTE     Razorpay: one object + one unique offer code per customer
+                 ↓
+ATTRIBUTE   payment webhook maps revenue back to the opportunity that caused it
+                 ↓
+MEASURE     a held-back control group, so lift is measured rather than asserted
+```
 
-Four steps, and each one is a number you can check:
+One command proves the whole chain, repeatably:
 
-**1 · It finds who is leaving — two ways.**
-Most customers never write a review, so payment behaviour is the primary signal: a regular silent for more than **3× their own ordering rhythm**. The second signal is their own words — a review saying they are leaving — which is rarer but explains *why*, and shapes what you say to them.
+```bash
+python scripts/test_agent_loop.py     # 19 assertions, detect → webhook → audit
+```
 
-**2 · It prices the opportunity honestly.**
-Four separate figures, never collapsed into one flattering headline:
+## 4 · The AI agent
 
-| Figure | What it means |
-|---|---|
-| Lifetime value at risk | What they have already spent. **Context — not recoverable** |
-| Realistically recoverable | One returning order each, at the discounted price |
-| Expected recovered | A projection, with its assumption printed beside it |
-| **Maximum exposure** | **Exact.** What it costs if every customer redeems |
+**The rule the whole system turns on: the model can ask for anything, and can execute nothing.**
 
-**3 · The owner approves, and Razorpay does the rest.**
-Each customer gets **their own Razorpay object and their own offer code**. So when a payment lands, it maps back to that campaign **by construction — not by estimate**.
+The agent is ~40 lines on the raw Anthropic SDK — no LangChain, deliberately, because a framework would hide the exact gap where the policy engine and audit log live. Each turn the model either answers or requests tools. For every tool call:
 
-**4 · It proves whether it worked.**
-About 30% of a larger segment is deliberately sent **nothing**. Their return rate is compared with the customers who got the offer, so lift is *measured against a control group* rather than asserted. Attribution proves the payment came through you; only a holdout speaks to whether you caused it.
+```python
+verdict, rule = policy.check(name, args, db)     # 1. decide, before anything
+entry = audit.write_ahead(...)                   # 2. record, before anything
+if   ALLOWED:          execute
+elif NEEDS_APPROVAL:   park in the approval queue
+else:                  return the violated rule to the model AS DATA
+audit.complete(entry, status, razorpay_ref, error)
+```
 
----
+That last line matters: a refusal is **returned, not raised**, so the model can explain it in plain language and propose a compliant alternative instead of crashing.
 
-### B · Warning you before the busiest window arrives
+### Key AI capabilities
 
-This half **spends nothing**. No offer, no payment link, no Razorpay object at all — and that is deliberate. Not every useful thing an agent does should become a transaction.
+| Capability | Model | What it does |
+|---|---|---|
+| **Review understanding** | Haiku | Labels every review with sentiment, themes from a fixed vocabulary of 11, urgency and a churn signal. One batched pass, cached in DB columns forever |
+| **Tool-calling agent** | Sonnet | 11 tools in 3 tiers — read-only, drafting, and money actions that are *requests only*. Reasons over aggregates, never raw text at scale |
+| **Merchant-facing explanation** | Haiku | Turns finished figures into two sentences an owner would say out loud. Told to use only the numbers given |
+| **Reply drafting** | Haiku | Three tones. Drafting is free; **posting is a gated action** |
+| **Reactive rescanning** | — | A churn-signal review triggers a fresh scan in a background thread, so the agent responds to events rather than schedules |
 
-It reads the order history and finds the window that reliably runs busier than a normal day, then names **which line items** will drive it. For the demo restaurant that means dishes; for a D2C brand it would be SKUs, for a clinic appointment types — the code groups whatever is in the basket, it knows nothing about food.
+### Where a model is deliberately NOT used
 
-Right now, for the demo merchant:
+This is the part worth reading. Six places refuse a model on purpose:
+
+- **All money arithmetic** — a model that can invent a rupee figure is a liability. It never touches the sum.
+- **The policy engine** — *"the model usually refuses"* is not a safety guarantee. Every bound is an integer compared to an integer.
+- **Both churn detectors** — the evidence shown to the merchant must *be* the basis of the decision, not a story about it. The detection rule is printed on the card.
+- **Demand forecasting** — a median of the last 8 comparable windows, so an owner can check it.
+- **Attribution** — a database join. Attribution by construction cannot be argued with.
+- **The holdout split** — seeded off the campaign id, so it cannot be quietly re-rolled until the numbers look better.
+
+Every model call also has a **deterministic fallback**: if the API fails, a pre-written sentence takes its place and the feature still works. → [Full reasoning in DEFENSE.md](DEFENSE.md)
+
+## 5 · The revenue opportunity
+
+What the merchant actually gets, in the order the money moves.
+
+**It prices every opportunity with four separate figures — never one flattering headline:**
+
+| Figure | Meaning | Status |
+|---|---|---|
+| Lifetime value at risk | What these customers have already spent | **Context — not recoverable.** Money already banked |
+| Realistically recoverable | One returning order each, at the discounted price | The honest upper bound |
+| Expected recovered | The above × an assumed 30% redemption | A projection, assumption printed beside it |
+| **Maximum exposure** | Incentive given away if *everyone* redeems | **Exact.** No assumption at all |
+
+**And it protects revenue without spending anything.** The live forecast right now:
 
 > **Friday 6–8 PM · 04 Sept · Very likely**
 > **96** orders expected · typical for that window: **52** · that is **+44 orders (+83.7% busier)**
 >
-> | Dish | Typical | Expected | Prepare extra |
+> | Item | Typical | Expected | Prepare extra |
 > |---|---:|---:|---:|
 > | Mutton Dum Biryani | 14 | 31 | **+17** |
 > | Hyderabadi Chicken Biryani | 17 | 31 | **+14** |
 > | Seekh Kebab | 8 | 22 | **+14** |
 >
-> *"Prepare about 17 extra Mutton Dum Biryani · keep packaging ready for roughly 44 additional orders · check delivery capacity before the rush starts."*
+> ~₹29,832 of demand on the table · **85.5%** forecast accuracy, back-tested
 
-**Why the line-item numbers are the useful part.** The Friday rush has a *different product mix* — Seekh Kebab rises 175% while total orders rise only 84%. The forecaster discovers that from the data rather than being told, which is why the advice is "prepare 17 more of this specific item" instead of a useless "get ready for more of everything". Any business with a busy window has the same asymmetry: the peak is not just bigger, it is *shaped differently*.
+**Why the item-level numbers are the useful part.** The rush has a *different product mix* — Seekh Kebab rises 175% while total orders rise only 84%. The forecaster discovers that from the data rather than being told, which is why the advice is "prepare 17 more of this specific item" instead of a useless "get ready for more of everything". Any business with a busy window has the same asymmetry: **the peak is not just bigger, it is shaped differently.**
 
-**And it does not overclaim.** The forecast is the median of the last 8 comparable Fridays, so it is explainable rather than a black box. Accuracy is **85.5%**, measured by re-forecasting past Fridays using only the data available before each one. Where slow-service complaints cluster in that window it says so in *percentage points* and calls it an association, never a cause. The button saves a preparation plan and says so — nothing is ordered, booked or charged.
+**And it proves whether the money actually came back.** Roughly 30% of a larger segment is deliberately sent nothing, and their return rate is compared with the treated group. Attribution proves a payment came through you; only a control group speaks to whether you *caused* it — and every lift figure is labelled directional, with both sample sizes shown.
 
-## Features
+## 6 · Razorpay integration
 
-- ✅ **Proactive growth agent** — scans unprompted, raises opportunities with evidence, money maths and a policy verdict already attached
-- ✅ **Two churn detectors** — transaction behaviour (works for 100% of customers) and review language (explains why)
-- ✅ **Real Razorpay money loop** — test-mode payment links and orders, unique offer code per customer, webhook attribution
-- ✅ **Deterministic policy engine** — every money action bounded, gated and refusable, with no model involved
-- ✅ **Write-ahead audit trail** — every step recorded *before* it happens, streamed live over WebSocket
-- ✅ **Holdout control groups** — incrementality measured, and labelled directional when the sample is too small
-- ✅ **Demand planning** — next busy window, dish-level quantities, back-tested accuracy, spends nothing
-- ✅ **Review intelligence** — themes, trends, time and zone concentration, with click-through to the actual reviews
-- ✅ **Reply queue** — feedback arrives live, already labelled and triaged; AI drafts in 3 tones, posting is gated
-- ✅ **Evaluation harness** — scores itself against planted ground truth and writes down its own failures
+Test mode, but **real API objects** — created on a live account, with real ids anyone can look up. Nothing here is mocked.
 
-## The seven screens — what each one is for
+| Piece | How it works |
+|---|---|
+| **Payment links** | One per customer, carrying the campaign id, offer code and customer id in `notes`. That notes field is where attribution physically lives |
+| **Orders API fallback** | Razorpay test mode allows only **30 payment links for the lifetime of an account**, and cancelling does not free them. `actions.py` falls back automatically to Orders (unlimited, and the object a real in-app checkout is built on) with attribution unchanged |
+| **Idempotency** | Every call carries `sha256(tool + args + customer)`. Checked against our own ledger *before* the call, and sent as the `reference_id` so even a race hits Razorpay's uniqueness check |
+| **Webhooks** | `payment_link.paid` → **HMAC signature verified before the body is parsed**. A replayed webhook cannot double-attribute |
+| **Attribution** | The webhook writes a new `Order` row carrying `campaign_id`. Revenue per campaign is therefore a one-column filter, not an estimate |
+| **Retry & rate limits** | Backoff at 1s, 3s, 8s, 20s. A single customer's failure never abandons the batch |
+| **Never touched** | Refunds, withdrawals, payout changes. Those tools **do not exist** — and the policy engine blocks them anyway |
 
-Open the **[live demo](https://revpulse-dashboard.onrender.com)** and follow along; this is the order the sidebar is in, and it is the order an owner actually asks the questions.
+## 7 · Demo
+
+### ▶ [revpulse-dashboard.onrender.com](https://revpulse-dashboard.onrender.com)
+
+Free hosting sleeps when idle, so the first load takes ~50 seconds. Everything after that is sub-second.
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     DEMO VIDEO — record a 2-3 minute walkthrough, upload it to the repo by
+     dragging the file into a GitHub issue (that gives you a permanent URL),
+     then paste it here:
+
+https://github.com/user-attachments/assets/YOUR-VIDEO-ID
+
+     SCREENSHOTS — save into docs/ and uncomment:
+
+| Action Center | Demand Planning | Audit Console |
+|---|---|---|
+| ![](docs/action-center.png) | ![](docs/demand-planning.png) | ![](docs/audit-console.png) |
+
+     ═══════════════════════════════════════════════════════════════════════ -->
+
+**What to look at, in order** — this is the sidebar order, and the order an owner asks the questions:
 
 | Screen | The question it answers | What you see |
 |---|---|---|
-| **Overview** | *What is happening?* | Business health in five tiles — 789 reviews, 55% positive, 3.66★, last month's revenue, and how much is at stake right now. Four charts behind them. Deliberately **read-only**: it counts opportunities and points at the Action Center rather than letting you act in two places. |
-| **Issues & Opportunities** | *Where are the problems?* | Four issue cards with a monthly sparkline, the peak time slot and the worst delivery zone. **Click one and it opens the actual customer reviews** — the evidence, not a summary of the evidence. |
-| **Reply Queue** | *Who needs answering?* | Reviews as they arrive, already labelled and sorted into urgent / important / routine. AI drafts a reply in three tones — but **posting is a gated action**, because words leaving the building are an external action. The customer-facing feedback form lives here too, so receiving and answering happen in one place. |
-| **Demand Planning** | *What is coming?* | The Friday forecast above: expected vs typical orders, the dish table, the evidence behind it, the back-tested accuracy, and a preparation checklist. **Spends nothing.** |
-| **Revenue Intelligence** | *Did it make money?* | Monthly revenue, top items by revenue, and the join between reviews and payments — *customers mentioning slow service reorder at 8% (n=88) vs 44% for everyone else (n=208)*. Both sample sizes always on screen, always labelled association rather than cause. |
-| **Action Center** | *What should I approve?* | **The one queue.** Every opportunity the agent found, with its evidence, four money figures and policy verdict. Approve or reject. Below that: pending approvals, and campaign results with revenue attributed and incentive actually spent. |
-| **Audit Console** | *What exactly happened?* | Every call the agent made, live over WebSocket — time, actor, tool, verdict, the rule that fired, the Razorpay reference. Filter to **Blocked** to see a refusal, or **Money actions** to see a payment attributed back to the opportunity that caused it. |
+| **Overview** | *What is happening?* | Health in five tiles — 789 reviews, 55% positive, 3.66★, last month's revenue, what is at stake. Deliberately **read-only**: it counts opportunities and points at the Action Center rather than letting you act in two places |
+| **Issues & Opportunities** | *Where are the problems?* | Issue cards with a monthly sparkline, peak time slot and worst zone. **Click one and it opens the actual customer reviews** — the evidence, not a summary of it |
+| **Reply Queue** | *Who needs answering?* | Reviews arriving live, already labelled and triaged urgent / important / routine. AI drafts in three tones; **posting is gated**. The customer feedback form lives here too |
+| **Demand Planning** | *What is coming?* | The Friday forecast, the item table, the evidence, the back-tested accuracy, and a preparation checklist. **Spends nothing** |
+| **Revenue Intelligence** | *Did it make money?* | Monthly revenue, top items, and the review↔payment join — *slow-service reviewers reorder at 8% (n=88) vs 44% (n=208)*. Always association, never cause |
+| **Action Center** | *What should I approve?* | **The one queue.** Every opportunity with evidence, four money figures and a policy verdict. Approve or reject. Campaign results below |
+| **Audit Console** | *What exactly happened?* | Every call live over WebSocket — actor, tool, verdict, rule, Razorpay reference. Filter to **Blocked** for a refusal, **Money actions** for an attributed payment |
 
-## How it works
+**Two things worth doing in the demo:** submit a review through the feedback form and watch it arrive labelled within a second; and open the Audit Console filtered to *Blocked* to see a refusal with the rule that fired.
 
-RevPulse is an ordinary FastAPI service with one unusual rule: **the language model can request anything, and execute nothing.** Between the model asking and money moving sits a deterministic policy engine and a write-ahead log.
-
-```mermaid
-flowchart TD
-    R["Razorpay transactions<br/>43,909 orders"] --> DET
-    F["First-party reviews<br/>collected at the payment moment"] --> EXT["Claude Haiku · one-time labelling<br/>sentiment · themes · urgency · churn signal"]
-    EXT --> DET
-
-    DET{"Two detectors<br/>plain Python rules, no AI"}
-    DET -->|"behaviour: silent 3x their own rhythm"| OPP
-    DET -->|"words: churn-signal review"| OPP
-
-    OPP["Opportunity<br/>evidence + 4 money figures<br/>all arithmetic in Python"]
-    OPP --> POL
-
-    POL{"POLICY ENGINE<br/>deterministic · zero LLM"}
-    POL -->|BLOCKED| REF["Rule returned to the agent<br/>as data, so it can adapt"]
-    POL -->|NEEDS_APPROVAL| GATE
-
-    GATE["Merchant clicks approve<br/>the only way money moves"]
-    GATE --> RZP["Razorpay test mode<br/>1 object + 1 offer code per customer<br/>idempotency key on every call"]
-    RZP --> WH["payment_link.paid webhook<br/>HMAC signature verified"]
-    WH --> ATT["Revenue attributed to the<br/>opportunity that caused it"]
-
-    OPP -.->|"30% of segment"| CTRL["Control group<br/>sent nothing, measured anyway"]
-    ATT --> CTRL
-
-    AUD[("Write-ahead audit log<br/>committed BEFORE execution")]
-    POL -.-> AUD
-    GATE -.-> AUD
-    RZP -.-> AUD
-    WH -.-> AUD
-```
-
-**The components, by their real names:**
-
-- **`agent/loop.py`** — the agent itself, ~40 lines on the raw Anthropic SDK. No LangChain: a framework would hide the exact gap where the policy engine and audit log live. Claude Sonnet drives the loop; a `BLOCKED` verdict is returned as tool-result *data*, not raised, so the model can explain the refusal and propose a compliant alternative.
-- **`policy.py`** — pure functions over the database, zero model involvement. Order of evaluation is BLOCKED → NEEDS_APPROVAL → ALLOWED, so no argument combination can slip a hard bound.
-- **`audit.py`** — the row is committed *before* execution, so a crash mid-Razorpay-call still leaves evidence. Every write broadcasts over `/ws/audit`.
-- **`actions.py`** — the only place approved actions execute. Holds the holdout split (seeded off the campaign id, so it cannot be quietly re-rolled) and per-customer failure handling.
-- **`razorpay_client.py`** — the only file that talks to Razorpay. Idempotency key is `sha256(tool + args + customer)`, checked against our own ledger *before* the call and sent as the `reference_id`.
-- **`opportunities.py`** — the detectors and the money maths. The model receives finished figures and writes two sentences; if that call fails, a deterministic sentence takes its place and the card still works.
-- **`aggregates.py`** — one pass over the order table, cached until `MAX(id)` moves. The in-memory stand-in for materialised views.
-
-## The safety model
-
-**The LLM never touches Razorpay.** Every money-touching request passes through `backend/app/policy.py`, which returns `ALLOWED`, `NEEDS_APPROVAL` or `BLOCKED` plus the exact rule that fired.
-
-| Rule | Bound |
-|---|---|
-| Max discount | 20% |
-| Max recovery offer value | ₹300 per customer |
-| Daily incentive budget | ₹5,000 |
-| Per-campaign cap | ₹2,000 |
-| Needs merchant approval | any campaign · any offer > ₹150 · any segment > 25 customers · posting any reply publicly |
-| Always blocked | refunds · withdrawals · payout changes · exceeding budget · >1 offer per customer per 30 days · re-targeting anyone who already redeemed |
-| Agent-initiated proposals | always escalate to a human, even when every other bound is clear |
-| Idempotency | every Razorpay call carries a key — a retry can never double-create or double-charge |
-
-Customer-protection bounds are enforced as strictly as money bounds. Refund, withdrawal and payout tools **do not exist** — and are blocked anyway. Defence in depth.
-
-## Proof, not claims
-
-`scripts/evaluate.py` scores the system against a committed answer key and writes [EVALUATION.md](EVALUATION.md) — **including its failures and false positives.**
-
-| Check | Result |
-|---|---|
-| Planted patterns detected | **5 / 5** |
-| Decoys falsely flagged | **0 / 2** |
-| High-value churn customers found | **3 / 3**, 0 false alarms |
-| Policy verdicts correct | **100 / 100** |
-| **Unauthorised money actions** | **0** |
-| Failure recovery + idempotency | PASS |
-
-The decoys matter as much as the patterns: two plausible-looking non-issues are planted that must **not** be flagged, so false positives are measurable rather than merely absent.
-
-```bash
-python scripts/test_agent_loop.py   # the whole money loop, end to end, 19 assertions
-python scripts/demo_failure.py      # blocked -> explained -> compliant retry -> zero duplicates
-```
-
-## Built with
-
-| | |
-|---|---|
-| **Backend** | Python 3.12, FastAPI, SQLAlchemy, SQLite, WebSocket |
-| **AI** | Claude Sonnet (agent loop), Claude Haiku (labelling & prose) — raw Anthropic SDK, no framework |
-| **Payments** | Razorpay Python SDK, test mode — payment links, orders, webhooks |
-| **Frontend** | React 19, Vite, Tailwind, Recharts |
-| **Deployment** | Render (API + static dashboard), blueprint in `render.yaml` |
-
-## Quick start
+## 8 · Run it locally
 
 Prereqs: Python 3.11+, Node 18+, a Razorpay test-mode account, an Anthropic API key.
 
@@ -259,28 +241,115 @@ All tests build their own fixture customers and restore state, so they score ide
 
 **Demo prep:** `scripts/reset_demo.py` clears campaigns and the audit trail while keeping reviews and their cached labels; `scripts/seed_demo.py` then creates one campaign with real test-mode links.
 
-**Razorpay test-mode limit:** an account may hold only **30 payment links, for the lifetime of the account** — cancelling does not free them. `actions.py` therefore falls back automatically to the Orders API, and `evaluate.py` stubs the provider call by default so the harness stays re-runnable. Use `EVAL_LIVE=1` or `test_money_chain.py` for the live proof.
+**Razorpay test-mode limit:** an account may hold only **30 payment links, for the lifetime of the account**. `evaluate.py` therefore stubs the provider by default so the harness stays re-runnable; use `EVAL_LIVE=1` or `test_money_chain.py` for the live proof.
 
 </details>
 
-## The data — and the honest story
+## 9 · Architecture
 
-There is no external dataset. Two committed, seeded scripts build it, so the whole thing is reproducible byte for byte.
+```mermaid
+flowchart TD
+    R["Razorpay transactions<br/>43,909 orders"] --> DET
+    F["First-party reviews<br/>collected at the payment moment"] --> EXT["Claude Haiku · one-time labelling<br/>sentiment · themes · urgency · churn signal"]
+    EXT --> DET
 
-`generate_data.py` creates 300 reviewing customers and 789 reviews with **planted, answer-keyed patterns** — plus two decoys that must not be flagged. `add_order_volume.py` then adds 900 walk-in customers who never review, bringing the business to **43,909 orders** across 8 months with a real restaurant's shape: quiet Mondays, heavy Friday and Saturday evenings, and a *different menu mix* at the weekend rush. Everything money-shaped goes through the real Razorpay test-mode API.
+    DET{"Two detectors<br/>plain Python rules, no AI"}
+    DET -->|"behaviour: silent 3x their own rhythm"| OPP
+    DET -->|"words: churn-signal review"| OPP
 
-**Where do reviews come from in production?** First-party feedback collected at the payment moment — after each successful Razorpay payment the customer gets a feedback link tied to that transaction. That joins every review to a customer *and* an order by construction, which is what makes review↔revenue analysis possible at all. Public platform reviews are anonymous and unmatchable.
+    OPP["Opportunity<br/>evidence + 4 money figures<br/>all arithmetic in Python"]
+    OPP --> POL
 
-## What isn't built
+    POL{"POLICY ENGINE<br/>deterministic · zero LLM"}
+    POL -->|BLOCKED| REF["Rule returned to the agent<br/>as data, so it can adapt"]
+    POL -->|NEEDS_APPROVAL| GATE
 
-[DEFENSE.md](DEFENSE.md) covers three things a system that moves money should be able to say about itself: **where a model was deliberately not used and why**, **what broke while building it and what I did about it** (eight failures, each traceable to a commit), and the limits below in full. The short version:
+    GATE["Merchant clicks approve<br/>the only way money moves"]
+    GATE --> RZP["Razorpay test mode<br/>1 object + 1 offer code per customer<br/>idempotency key on every call"]
+    RZP --> WH["payment_link.paid webhook<br/>HMAC signature verified"]
+    WH --> ATT["Revenue attributed to the<br/>opportunity that caused it"]
 
-- **Synthetic, seeded data.** No real merchant has used this.
-- **Customer payments are simulated** — but through the *same handler* the real webhook calls.
+    OPP -.->|"30% of segment"| CTRL["Control group<br/>sent nothing, measured anyway"]
+    ATT --> CTRL
+
+    AUD[("Write-ahead audit log<br/>committed BEFORE execution")]
+    POL -.-> AUD
+    GATE -.-> AUD
+    RZP -.-> AUD
+    WH -.-> AUD
+```
+
+**The components, by their real names:**
+
+- **`agent/loop.py`** — the agent, ~40 lines on the raw Anthropic SDK. Claude Sonnet; a `BLOCKED` verdict is returned as tool-result *data*, not raised.
+- **`policy.py`** — pure functions over the database, zero model involvement. Evaluation order is BLOCKED → NEEDS_APPROVAL → ALLOWED, so no argument combination can slip a hard bound.
+- **`audit.py`** — the row is committed *before* execution, so a crash mid-Razorpay-call still leaves evidence. Every write broadcasts over `/ws/audit`.
+- **`actions.py`** — the only place approved actions execute. Holds the seeded holdout split and per-customer failure handling.
+- **`razorpay_client.py`** — the only file that talks to Razorpay. Idempotency keys and the Orders fallback.
+- **`opportunities.py`** — the detectors and the money maths.
+- **`demand.py`** — the forecast. Creates no Razorpay object at all.
+- **`aggregates.py`** — one pass over the order table, cached until `MAX(id)` moves. The in-memory stand-in for materialised views.
+
+### The safety model
+
+| Rule | Bound |
+|---|---|
+| Max discount | 20% |
+| Max recovery offer value | ₹300 per customer |
+| Daily incentive budget | ₹5,000 |
+| Per-campaign cap | ₹2,000 |
+| Needs merchant approval | any campaign · any offer > ₹150 · any segment > 25 customers · posting any reply publicly |
+| Always blocked | refunds · withdrawals · payout changes · exceeding budget · >1 offer per customer per 30 days · re-targeting anyone who already redeemed |
+| Agent-initiated proposals | always escalate to a human, even when every other bound is clear |
+| Idempotency | every Razorpay call carries a key — a retry can never double-create or double-charge |
+
+Customer-protection bounds are enforced as strictly as money bounds.
+
+### Built with
+
+| | |
+|---|---|
+| **Backend** | Python 3.12, FastAPI, SQLAlchemy, SQLite, WebSocket |
+| **AI** | Claude Sonnet (agent loop), Claude Haiku (labelling &amp; prose) — raw Anthropic SDK, no framework |
+| **Payments** | Razorpay Python SDK, test mode — payment links, orders, webhooks |
+| **Frontend** | React 19, Vite, Tailwind, Recharts |
+| **Deployment** | Render (API + static dashboard), blueprint in `render.yaml` |
+
+→ [Full architecture document](ARCHITECTURE.md)
+
+## 10 · Evaluation
+
+`scripts/evaluate.py` scores the system against a committed answer key and writes [EVALUATION.md](EVALUATION.md) — **including its failures and false positives.**
+
+| Check | Result | Target |
+|---|---|---|
+| Planted patterns detected | **5 / 5** | 5/5 |
+| Decoys falsely flagged | **0 / 2** | 0/2 |
+| High-value churn customers found | **3 / 3**, 0 false alarms | 3/3 |
+| Policy verdicts correct | **100 / 100** | 100 |
+| **Unauthorised money actions** | **0** | 0 |
+| Failure recovery + idempotency | PASS | PASS |
+| Holdout deterministic, control unoffered | PASS | PASS |
+
+**The decoys matter as much as the patterns.** Two plausible-looking non-issues are planted that must **not** be flagged, so false positives are measurable rather than merely absent. Anyone can build a system that finds things; the decoys measure whether it finds things that are not there.
+
+```bash
+python scripts/demo_failure.py   # blocked -> explained -> compliant retry -> zero duplicates
+```
+
+That script stages a budget constraint, asks the agent for an over-budget campaign, and **asserts** that its recovery proposal came in under the remaining budget — so "the agent recovered compliantly" is a tested claim, not a lucky run.
+
+## 11 · Limitations and what is simulated
+
+Stated in full in **[DEFENSE.md](DEFENSE.md)**, which also documents where a model was deliberately not used and eight real failures with the commits that fixed them. The short version:
+
+- **Synthetic, seeded data.** 789 reviews, 1,204 customers and 43,909 orders from two committed scripts with a planted answer key. **No real merchant has used this system.**
+- **Customer payments are simulated** — triggered through `/api/simulate/payment`, which runs the *same handler* the real webhook calls. The code path is the production one; only the trigger differs. Campaign response rates in the report are labelled `[SIMULATED]` at every appearance.
+- **What is real:** the Razorpay integration and every object it creates, the policy engine and every verdict, the write-ahead audit trail, idempotency and retry behaviour, the extraction pipeline, and all money arithmetic.
 - **No authentication at all.** Fine for a local demo; the first thing production would need.
-- **Attribution is exact; causation is not.** Cannibalisation is how this most plausibly loses a merchant money, which is why there is a control group — and why every lift figure is labelled directional.
+- **Attribution is exact; causation is not.** Cannibalisation is how this most plausibly loses a merchant money — hence the control group, and hence every lift figure being labelled directional.
 - **Restaurants are the demo, not the best vertical.** Too much Indian restaurant money arrives as UPI QR or cash with no identity attached. This fits D2C, subscriptions and clinics better; the loop is identical, only the density of identified transactions changes.
-- **Messaging compliance is acknowledged, not implemented.** Consent, opt-out and DLT registration would all need to exist before one real message went out.
+- **Messaging compliance is acknowledged, not implemented.** Consent, opt-out and DLT registration would all need to exist before one real message went out. Notification is switched off entirely in the demo.
 
 ---
 
