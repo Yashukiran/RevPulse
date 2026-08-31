@@ -10,7 +10,7 @@ One of those spends money and is gated behind a human. The other spends nothing 
 
 <sub>Works for any business where a payment carries a customer identity — D2C brands, subscriptions, clinics, services, delivery. The demo is a restaurant because it is the easiest to picture.</sub>
 
-**[▶ Live demo](https://revpulse-dashboard.onrender.com)** · [Architecture](ARCHITECTURE.md) · [Evaluation](EVALUATION.md) · [What's wrong with it](DEFENSE.md)
+**[▶ Live demo](https://revpulse-dashboard.onrender.com)** · [Architecture](ARCHITECTURE.md) · [Evaluation](EVALUATION.md) · [Limits &amp; trade-offs](DEFENSE.md)
 
 <sub>Razorpay AI Buildathon · Track 01, AI Growth & Agentic Commerce · <i>first load takes ~50s while the free tier wakes</i></sub>
 
