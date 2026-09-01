@@ -155,25 +155,42 @@ The Razorpay objects are **real, created on a live test-mode account** — payme
 
 > ### From insight, to payment, to measurable revenue — in one loop.
 
-## 6 · How RevPulse works
+## 6 · How it all fits together
 
+```mermaid
+flowchart TD
+    A["Customers · Orders · Payments"]:::data
+    B["Reviews &amp; feedback"]:::data
+    A --> C["Customer &amp; revenue intelligence"]:::data
+    B --> C
+
+    C --> D["<b>AI AGENT</b><br/>finds the opportunity,<br/>prices it, explains why"]:::ai
+
+    D --> E{"<b>POLICY ENGINE</b><br/>deterministic rules · no AI"}:::gate
+    E -->|blocked| F["Rule returned to the agent,<br/>which proposes a smaller offer"]:::gate
+    E -->|needs approval| G["<b>MERCHANT APPROVES</b><br/>the only way money moves"]:::gate
+
+    G --> H["Razorpay payment link<br/>one per customer, carrying<br/>the campaign and offer code"]:::money
+    H --> I["Customer pays"]:::money
+    I --> J["Webhook returns<br/>signature verified"]:::money
+    J --> K["<b>REVENUE MEASURED</b><br/>against the opportunity<br/>that caused it"]:::money
+
+    K -.->|"what worked feeds the next scan"| C
+
+    L[("AUDIT TRAIL<br/>written before anything executes<br/>streams live to the dashboard")]:::audit
+    D -.-> L
+    E -.-> L
+    G -.-> L
+    J -.-> L
+
+    classDef data fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0c4a6e
+    classDef ai fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#4c1d95
+    classDef gate fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f
+    classDef money fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d
+    classDef audit fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#0f172a
 ```
-Merchant data — customers, orders, reviews
-        ↓
-Customer & revenue intelligence
-        ↓
-AI opportunity detection
-        ↓
-Policy check  →  merchant approval
-        ↓
-Campaign or payment action
-        ↓
-Razorpay
-        ↓
-Payment event
-        ↓
-Revenue measured against the opportunity
-```
+
+**Read it in one line:** the merchant's own data becomes an opportunity, the opportunity passes a rulebook the AI cannot argue with, the merchant approves, Razorpay executes, and the money that comes back is tied to the card that started it — while every step writes itself down before it happens.
 
 ## 7 · It also sees demand coming
 
