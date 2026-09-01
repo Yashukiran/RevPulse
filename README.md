@@ -223,11 +223,27 @@ Revenue protected, without spending a rupee to protect it.
 
 ### ▶ **[revpulse-dashboard.onrender.com](https://revpulse-dashboard.onrender.com)**
 
-**Sixty seconds, three clicks:**
+**Four things worth doing, in this order:**
 
-1. **Action Center** — open the opportunity. Read the evidence, the four money figures, the policy verdict. Approve it and watch the Razorpay objects appear.
-2. **Audit Console** — filter to **Blocked** and watch the agent get refused, with the exact rule that stopped it.
-3. **Demand Planning** — the Friday forecast, the item-level prep list, and the accuracy it was back-tested at.
+**1 · Action Center — this is the revenue.** Open the opportunity card. The agent found it with nobody asking: it scanned 1,204 customers, worked out that Manish orders every 25 days, saw he was 79 days silent, and priced the recovery — **₹5,540 at risk, ₹236 expected back, ₹138 the absolute worst case.** The evidence that flagged him is on the card, not hidden behind it. Approve, and RevPulse creates the Razorpay link, sends the offer, and when he pays, that payment is written back against this exact card. **A customer who was leaving becomes revenue you can point at.**
+
+**2 · Reply Queue — watch it think, live.** Submit a review through the feedback form at the bottom. In **about a second and a half** it comes back labelled with sentiment, theme, urgency and a churn signal, sorted into the queue, with reply drafts in three tones ready. Nothing is posted publicly without approval.
+
+**3 · Audit Console — the receipts.** Every action the agent has taken, streaming live: what it asked for, what the policy engine decided, which rule applied, and the Razorpay reference if money moved. Filter to **Blocked** to see the agent asking for something it was refused — this is where you verify the safety claims rather than take them on trust.
+
+**4 · Demand Planning — revenue protected, nothing spent.** The Friday forecast, the item-level prep list, and the accuracy it was back-tested at.
+
+### Every screen, and the question it answers
+
+| Screen | The question | What you see |
+|---|---|---|
+| **Overview** | *What is happening?* | Business health in five tiles — reviews, sentiment, rating, last month's revenue, revenue at risk. Deliberately read-only; it points at the Action Center rather than letting you act in two places |
+| **Issues & Opportunities** | *Where are the problems?* | Issue cards with a monthly trend, peak time slot and worst zone. Click one and it opens **the actual customer reviews** — the evidence itself, not a summary of it |
+| **Reply Queue** | *Who needs answering?* | Reviews arriving live, already labelled and triaged urgent / important / routine, with AI drafts in three tones. **Posting is gated** |
+| **Demand Planning** | *What is coming?* | The next busy window, the items that will drive it, the evidence behind the number, and a preparation checklist. **Spends nothing** |
+| **Revenue Intelligence** | *Did it make money?* | Monthly revenue, top items, and the review-to-payment join — always stated as association, never as cause |
+| **Action Center** | *What should I approve?* | **The one queue.** Every opportunity with its evidence, its four money figures and its policy verdict. Approve or reject. Campaign results below |
+| **Audit Console** | *What exactly happened?* | Every call live over WebSocket — actor, tool, verdict, rule, Razorpay reference |
 
 ## 9 · Honest limitations
 
