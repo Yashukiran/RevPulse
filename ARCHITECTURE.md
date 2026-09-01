@@ -1,43 +1,35 @@
 # RevPulse — Architecture
 
-```
-                        MERCHANT (The Nandana Palace)
-                                │
-              ┌─────────────────┴──────────────────┐
-              ▼                                    ▼
-        FIRST-PARTY REVIEWS                RAZORPAY TEST-MODE
-        (feedback tied to orders)          TRANSACTIONS / CUSTOMERS
-              │                                    │
-              └─────────────────┬──────────────────┘
-                                ▼
-                        AI GROWTH AGENT
-                 (Claude tool-calling loop, FastAPI)
-              observe → reason → recommend → (approve) → act
-                                │
-                ┌───────────────┼────────────────┐
-                ▼               ▼                ▼
-         Review extraction  Insight engine   Action tools
-         (per-review        (theme trends,   (create campaign,
-          structured        time/zone conc., recovery offer,
-          analysis, cached) revenue joins)   payment links, replies)
-                                │
-                                ▼
-                      ██ POLICY ENGINE ██          ← deterministic Python,
-                   (bounds, gates, caps —            NOT AI. The LLM can ask;
-                    ALLOWED / NEEDS_APPROVAL /       only policy can permit.
-                    BLOCKED)
-                                │
-                                ▼
-                      RAZORPAY TEST-MODE API
-                    (payment links, offer codes)
-                                │
-                                ▼
-                  ██ AUDIT TRAIL (write-ahead) ██  → streams live to UI (WebSocket)
-                                │
-                                ▼
-                    ATTRIBUTION + MEASUREMENT
-              (unique link/code per campaign → exact,
-               not statistical, revenue attribution)
+```mermaid
+flowchart TD
+    R["Razorpay transactions<br/>43,909 orders"] --> DET
+    F["First-party reviews<br/>collected at the payment moment"] --> EXT["Claude Haiku · one-time labelling<br/>sentiment · themes · urgency · churn signal"]
+    EXT --> DET
+
+    DET{"Two detectors<br/>plain Python rules, no AI"}
+    DET -->|"behaviour: silent 3x their own rhythm"| OPP
+    DET -->|"words: churn-signal review"| OPP
+
+    OPP["Opportunity<br/>evidence + 4 money figures<br/>all arithmetic in Python"]
+    OPP --> POL
+
+    POL{"POLICY ENGINE<br/>deterministic · zero LLM"}
+    POL -->|BLOCKED| REF["Rule returned to the agent<br/>as data, so it can adapt"]
+    POL -->|NEEDS_APPROVAL| GATE
+
+    GATE["Merchant clicks approve<br/>the only way money moves"]
+    GATE --> RZP["Razorpay test mode<br/>1 object + 1 offer code per customer<br/>idempotency key on every call"]
+    RZP --> WH["payment_link.paid webhook<br/>HMAC signature verified"]
+    WH --> ATT["Revenue attributed to the<br/>opportunity that caused it"]
+
+    OPP -.->|"30% of segment"| CTRL["Control group<br/>sent nothing, measured anyway"]
+    ATT --> CTRL
+
+    AUD[("Write-ahead audit log<br/>committed BEFORE execution")]
+    POL -.-> AUD
+    GATE -.-> AUD
+    RZP -.-> AUD
+    WH -.-> AUD
 ```
 
 ## The proactive layer — `backend/app/opportunities.py`
@@ -119,6 +111,32 @@ Each campaign gets a unique offer code; each targeted customer gets their own pa
 
 React + Vite + Tailwind SPA: overview, issues with evidence drill-down, reply queue, revenue intelligence, action center (agent runs + approval queue + campaign results), and the live audit console fed by WebSocket.
 
-## Scaling notes (1M reviews)
+## Can this scale? It's using SQLite.
 
-Extraction already runs as a batched offline pass — at scale it becomes a queue worker; the fixed theme vocabulary becomes embedding-based clustering with periodic re-labeling. SQLite swaps for Postgres (the schema is the design, not the engine). Aggregates move to materialized views. The agent layer is unchanged: it reasons over aggregates, so its token cost is independent of review volume.
+**SQLite is a deliberate default for the hackathon, because it gives a judge zero database setup** — clone the repo and the product runs immediately. It is *not* the production scaling choice.
+
+**For production the answer is PostgreSQL**, because RevPulse has a highly relational model: customers, orders, campaigns, payment links and redemptions are all connected — **sixteen foreign keys across thirteen tables** — and some operations need **atomic multi-table transactions**. Creating a recovery offer writes to `campaigns`, `payment_links`, `offer_redemptions` and `budget_spend`, and those must all commit or none: a partial commit means an offer sent with no budget recorded, and the daily cap silently stops working.
+
+That relational shape is also why a document store is the wrong answer. The review-to-revenue join *is* the product, and attribution is a foreign key (`orders.campaign_id`) rather than an inference.
+
+**The database layer goes through SQLAlchemy, so the application is not tightly coupled to SQLite** — and that is checkable rather than promised. Every column type in `models.py` is portable, the app issues **no raw SQL**, and exactly **two lines** in the whole codebase depend on the engine, both isolated in `db.py`. Point `DATABASE_URL` at Postgres and the schema compiles straight to `SERIAL` / `TIMESTAMP` / `VARCHAR` DDL, connection pooling switches on, and the SQLite-only column-widening helper no-ops in favour of Alembic.
+
+**The next scaling steps are not just changing the database, though.** In order:
+
+1. **Enforce merchant-level multi-tenancy.** Today only `customers` and `menu_items` carry a `merchant_id`. Every table needs one, with row-level security so isolation is the database's job rather than something to remember on every query.
+2. **Move aggregate caching out of process.** `aggregates.py` holds the whole business in one worker's memory; four workers means four copies and four rebuilds. These become materialised, incrementally-updated views.
+3. **Make AI and review processing asynchronous.** Extraction is currently a synchronous batched pass; at volume it belongs in a queue with workers. The fixed theme vocabulary becomes embedding-based clustering with periodic re-labelling.
+
+**Then PostgreSQL gives the concurrent, transactional foundation** those three need in order to run across multiple API instances. It removes the single-writer lock — necessary, but on its own not sufficient.
+
+The agent layer is unchanged by any of this: it reasons over aggregates, so its token cost is independent of review volume.
+
+## Built with
+
+| | |
+|---|---|
+| **Backend** | Python 3.12, FastAPI, SQLAlchemy, SQLite, WebSocket |
+| **AI** | Claude Sonnet (agent loop), Claude Haiku (labelling & prose) — raw Anthropic SDK, no framework |
+| **Payments** | Razorpay Python SDK, test mode — payment links, orders, webhooks |
+| **Frontend** | React 19, Vite, Tailwind, Recharts |
+| **Deployment** | Render (API + static dashboard), blueprint in `render.yaml` |
