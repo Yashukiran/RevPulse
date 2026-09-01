@@ -233,6 +233,8 @@ Revenue protected, without spending a rupee to protect it.
 
 **2 · Reply Queue — watch it think, live.** Submit a review through the feedback form at the bottom. In **about a second and a half** it comes back labelled with sentiment, theme, urgency and a churn signal, sorted into the queue, with reply drafts in three tones ready. Nothing is posted publicly without approval.
 
+> Answering reviews is the highest-return unpaid work a merchant does — an unhappy customer who gets a reply often comes back, and one who is ignored does not. It doesn't happen because it costs ten minutes per review at the end of a fourteen-hour day, so the queue is abandoned by the second week. **Three drafts in under two seconds is the difference between replying to every review and replying to none.**
+
 **3 · Audit Console — the receipts.** Every action the agent has taken, streaming live: what it asked for, what the policy engine decided, which rule applied, and the Razorpay reference if money moved. Filter to **Blocked** to see the agent asking for something it was refused — this is where you verify the safety claims rather than take them on trust.
 
 **4 · Demand Planning — revenue protected, nothing spent.** The Friday forecast, the item-level prep list, and the accuracy it was back-tested at.
