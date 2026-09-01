@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { get, post, wsURL, onApiWaking, invalidate } from './api'
+import { get, post, wsURL, onApiWaking, invalidate, IS_LOCAL_API } from './api'
 import Sidebar from './components/shared/Sidebar'
 import ToastStack from './components/shared/Toast'
 import Overview from './components/Overview'
@@ -231,8 +231,9 @@ export default function App() {
         {apiWaking && (
           <div className="mx-8 mt-4 flex items-center gap-2.5 rounded-lg border border-amber-400/40 bg-amber-400/10 px-4 py-2.5 text-xs text-amber-300">
             <span className="pulse-dot h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-            Starting the API — free hosting suspends it when idle. This takes up to a
-            minute the first time; the page fills in on its own.
+            {IS_LOCAL_API
+              ? 'Waiting for the local API on port 8000…'
+              : 'Starting the API — free hosting suspends it when idle. This takes up to a minute the first time; the page fills in on its own.'}
           </div>
         )}
         <div className="flex-1 px-8 py-6">

@@ -4,12 +4,19 @@
 const RAW = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').trim()
 export const API = /^https?:\/\//.test(RAW) ? RAW : `https://${RAW}`
 
-// Free hosting suspends the API after ~15 minutes idle and takes up to a minute
-// to wake. During that window fetch throws a bare "Failed to fetch" and the
-// provider returns 502/503/504 — none of which mean the request was wrong. So
-// transient failures are retried across roughly a minute before giving up, and
-// the message the merchant sees says what is actually happening.
-const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 12000, 16000, 20000]
+// A local API is either running or it is not: nothing is listening on the port,
+// the connection is refused immediately, and waiting will not change that. A
+// hosted one is different — free hosting suspends it after ~15 minutes idle and
+// takes up to a minute to wake, during which fetch throws a bare "Failed to
+// fetch" and the host returns 502/503/504. Neither means the request was wrong.
+//
+// So the retry budget follows the target: two quick attempts locally, about a
+// minute against a host that might be waking up. Retrying a refused localhost
+// connection for sixty seconds only makes a missing backend look like a hang.
+export const IS_LOCAL_API = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(API)
+const RETRY_DELAYS_MS = IS_LOCAL_API
+  ? [400, 800]
+  : [1000, 2000, 4000, 8000, 12000, 16000, 20000]
 const WAKING_STATUSES = new Set([502, 503, 504])
 
 export class ApiError extends Error {
@@ -90,10 +97,16 @@ async function request(path, init) {
 
   if (announced) announceWaking(false)
   throw new ApiError(
-    `Could not reach the server — ${lastProblem}. Free hosting suspends the ` +
-    `API when idle and it can take up to a minute to start. Reload in a moment; ` +
-    `if it persists, the API service is down rather than asleep.`,
-    { waking: true }
+    IS_LOCAL_API
+      ? `The API is not running. This dashboard reads everything from ` +
+        `${API}, and nothing is answering there.\n\n` +
+        `Start both servers by double-clicking start.bat — "npm run dev" ` +
+        `only starts this dashboard. Or run the API yourself:\n` +
+        `cd backend && .venv/Scripts/python -m uvicorn app.main:app --port 8000`
+      : `Could not reach the server — ${lastProblem}. Free hosting suspends ` +
+        `the API when idle and it can take up to a minute to start. Reload in ` +
+        `a moment; if it persists, the API service is down rather than asleep.`,
+    { waking: !IS_LOCAL_API }
   )
 }
 
