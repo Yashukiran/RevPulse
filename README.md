@@ -62,6 +62,10 @@ Then it does the one thing dashboards never do: **it carries the action through 
 
 RevPulse finds **valuable customers whose buying pattern has broken** — someone who ordered like clockwork and has now been silent far longer than *their own* normal rhythm. Not a churn score. Not a segment. A named person, with the evidence that flagged them attached.
 
+### This already works. It just isn't automated.
+
+There is a restaurant near a cluster of student hostels that runs a near-permanent offer on the delivery apps — and it works, because those students order when there is a discount and skip it when there isn't. The app pushes offers at the people most likely to take them, and the restaurant's revenue rises. **The mechanism is proven: the right offer, to the right customer, at the moment they are deciding.** What a merchant cannot do today is run that on their *own* customers, from their *own* payment data, without a platform doing it for them. RevPulse is that.
+
 **This is a real opportunity from the live demo — the agent found it unprompted:**
 
 > ### A high-value customer has gone quiet
