@@ -159,25 +159,31 @@ The Razorpay objects are **real, created on a live test-mode account** — payme
 
 ```mermaid
 flowchart TD
-    A["Customers · Orders · Payments"]:::data
-    B["Reviews &amp; feedback"]:::data
-    A --> C["Customer &amp; revenue intelligence"]:::data
+    A["Customers · Orders · Payments"]
+    B["Reviews and feedback"]
+    C["Customer and revenue intelligence"]
+    D["AI AGENT<br/>finds the opportunity,<br/>prices it, explains why"]
+    E{"POLICY ENGINE<br/>deterministic rules · no AI"}
+    F["Rule returned to the agent,<br/>which proposes a smaller offer"]
+    G["MERCHANT APPROVES<br/>the only way money moves"]
+    H["Razorpay payment link<br/>carrying the campaign and offer code"]
+    I["Customer pays"]
+    J["Webhook returns<br/>signature verified"]
+    K["REVENUE MEASURED<br/>against the opportunity that caused it"]
+    L[("AUDIT TRAIL<br/>written before anything executes<br/>streams live to the dashboard")]
+
+    A --> C
     B --> C
+    C --> D
+    D --> E
+    E -->|blocked| F
+    E -->|needs approval| G
+    G --> H
+    H --> I
+    I --> J
+    J --> K
+    K -.->|what worked feeds the next scan| C
 
-    C --> D["<b>AI AGENT</b><br/>finds the opportunity,<br/>prices it, explains why"]:::ai
-
-    D --> E{"<b>POLICY ENGINE</b><br/>deterministic rules · no AI"}:::gate
-    E -->|blocked| F["Rule returned to the agent,<br/>which proposes a smaller offer"]:::gate
-    E -->|needs approval| G["<b>MERCHANT APPROVES</b><br/>the only way money moves"]:::gate
-
-    G --> H["Razorpay payment link<br/>one per customer, carrying<br/>the campaign and offer code"]:::money
-    H --> I["Customer pays"]:::money
-    I --> J["Webhook returns<br/>signature verified"]:::money
-    J --> K["<b>REVENUE MEASURED</b><br/>against the opportunity<br/>that caused it"]:::money
-
-    K -.->|"what worked feeds the next scan"| C
-
-    L[("AUDIT TRAIL<br/>written before anything executes<br/>streams live to the dashboard")]:::audit
     D -.-> L
     E -.-> L
     G -.-> L
@@ -188,6 +194,12 @@ flowchart TD
     classDef gate fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f
     classDef money fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d
     classDef audit fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#0f172a
+
+    class A,B,C data
+    class D ai
+    class E,F,G gate
+    class H,I,J,K money
+    class L audit
 ```
 
 **Read it in one line:** the merchant's own data becomes an opportunity, the opportunity passes a rulebook the AI cannot argue with, the merchant approves, Razorpay executes, and the money that comes back is tied to the card that started it — while every step writes itself down before it happens.
