@@ -19,7 +19,7 @@ RevPulse reads a merchant's own customers, orders and feedback, and turns them i
 
 ---
 
-## The problem
+## 1 · The problem
 
 There is a restaurant in Bengaluru doing **5,072 orders a month.**
 
@@ -35,7 +35,7 @@ Could the owner have caught it? Only by knowing that *Manish specifically* order
 
 Nobody does that by hand. So it never gets done, and the money quietly walks.
 
-## What RevPulse does
+## 2 · What RevPulse does
 
 Every merchant already owns the data that would catch this. It sits in their payments, their order history, their reviews. The gap is not data — it is that **a report tells you what happened, and then stops.**
 
@@ -56,7 +56,7 @@ Then it does the one thing dashboards never do: **it carries the action through 
 
 ---
 
-# Find Revenue Opportunities
+# 3 · Find Revenue Opportunities
 
 **This is the product.** A merchant does not need another chart. They need to know where next month's revenue is quietly disappearing, and what to do about it today.
 
@@ -107,7 +107,7 @@ Razorpay sends it — and the returning payment is measured against this card
 
 Everything lands in **one place**: the Action Center. Every opportunity carries its evidence, its four figures and its policy verdict, and the merchant either approves it or rejects it. No hunting across screens, no acting in two places.
 
-## The AI agent
+## 4 · The AI agent
 
 **The agent works without being asked.** It scans the merchant's data when the system starts, and again the moment new feedback suggests a customer is unhappy. Nobody types a prompt.
 
@@ -130,7 +130,7 @@ Every decision — allowed, blocked, or parked for approval — is recorded **be
 
 > **AI reasons · Policy controls · The merchant decides · Razorpay executes**
 
-## Razorpay closes the loop
+## 5 · Razorpay closes the loop
 
 This is the part that makes RevPulse a revenue product rather than an analytics one. **The insight does not stop at a recommendation — it becomes a payment, and the payment comes back as measured revenue.**
 
@@ -155,7 +155,7 @@ The Razorpay objects are **real, created on a live test-mode account** — payme
 
 > ### From insight, to payment, to measurable revenue — in one loop.
 
-## How RevPulse works
+## 6 · How RevPulse works
 
 ```
 Merchant data — customers, orders, reviews
@@ -175,7 +175,7 @@ Payment event
 Revenue measured against the opportunity
 ```
 
-## It also sees demand coming
+## 7 · It also sees demand coming
 
 Not every useful thing an agent does should become a transaction. RevPulse's second capability spends **nothing** — no offer, no payment link, no Razorpay object at all.
 
@@ -190,7 +190,7 @@ The useful part is the item detail. The rush is not just bigger, it is **shaped 
 
 Revenue protected, without spending a rupee to protect it.
 
-## See it in action
+## 8 · See it in action
 
 ### ▶ **[revpulse-dashboard.onrender.com](https://revpulse-dashboard.onrender.com)**
 
@@ -200,13 +200,13 @@ Revenue protected, without spending a rupee to protect it.
 2. **Audit Console** — filter to **Blocked** and watch the agent get refused, with the exact rule that stopped it.
 3. **Demand Planning** — the Friday forecast, the item-level prep list, and the accuracy it was back-tested at.
 
-## Honest limitations
+## 9 · Honest limitations
 
 - The demo runs on **synthetic, seeded data** — 1,204 customers and 43,909 orders from committed generator scripts. No real merchant has used this yet.
 - **Razorpay is in test mode**, and customer payments are simulated through the same webhook handler real ones use — the Razorpay objects are real, the paying customer is not.
 - **There is no authentication**, and merchant onboarding is not built — this is a single-merchant demo, not a multi-tenant product.
 
-## Built with
+## 10 · Built with
 
 | | |
 |---|---|
