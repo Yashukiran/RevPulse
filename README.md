@@ -10,7 +10,7 @@ One of those spends money and is gated behind a human. The other spends nothing 
 
 <sub>Works for any business where a payment carries a customer identity — D2C brands, subscriptions, clinics, services, delivery. The demo is a restaurant because it is the easiest to picture.</sub>
 
-**[▶ Live demo](https://revpulse-dashboard.onrender.com)** · [Architecture](ARCHITECTURE.md) · [Evaluation](EVALUATION.md) · [Going live with a real merchant](PRODUCTION.md) · [AI judgment, failures &amp; limits](DEFENSE.md)
+**[▶ Live demo](https://revpulse-dashboard.onrender.com)** · [Architecture](ARCHITECTURE.md) · [Evaluation](EVALUATION.md) · [AI judgment, failures &amp; limits](DEFENSE.md)
 
 <sub>Razorpay AI Buildathon · Track 01, AI Growth &amp; Agentic Commerce · <i>first load takes ~50s while the free tier wakes</i></sub>
 
@@ -333,7 +333,7 @@ That relational shape is also why a document store is the wrong answer. The revi
 | **Frontend** | React 19, Vite, Tailwind, Recharts |
 | **Deployment** | Render (API + static dashboard), blueprint in `render.yaml` |
 
-→ [Full architecture document](ARCHITECTURE.md) · → [What onboarding a real merchant would take](PRODUCTION.md)
+→ [Full architecture document](ARCHITECTURE.md)
 
 ## 10 · Evaluation
 
