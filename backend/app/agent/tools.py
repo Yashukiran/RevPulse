@@ -377,7 +377,8 @@ def draft_reply(db, review_id: int, tone: str, **_) -> dict:
     r.reply_text = draft
     db.commit()
     return {"review_id": review_id, "tone": tone, "draft": draft,
-            "note": "Draft saved. Posting publicly requires the gated post_reply action."}
+            "note": ("Draft saved. Posting is a gated action; an approved reply is recorded "
+                     "against the review, not sent to an external review platform.")}
 
 
 EXECUTORS = {

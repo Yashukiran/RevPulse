@@ -118,7 +118,7 @@ function ReviewRow({ review, isNew }) {
             <div className="border-l-2 border-sky-400/50 bg-slate-950/60 rounded-r-lg p-3">
               <p className="text-xs text-slate-200 italic leading-relaxed">&ldquo;{draft.draft}&rdquo;</p>
               <p className="mt-2 text-[11px] text-amber-400">
-                {draft.note || 'Posting publicly requires approval (gated action).'}
+                {draft.note || 'Posting is a gated action; an approved reply is recorded against the review, not sent to an external review platform.'}
               </p>
             </div>
           )}
