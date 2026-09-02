@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .. import actions, audit
+from .. import actions, audit, policy
 from ..agent.loop import run_agent
 from ..db import get_db
 from ..models import Approval, AuditLog, OfferRedemption, Opportunity, Order, PaymentLink
@@ -45,6 +45,28 @@ def approve(approval_id: int, db: Session = Depends(get_db)):
 
     entry = db.get(AuditLog, ap.audit_id)
     args = json.loads(ap.args_json)
+
+    # Re-check before executing. The verdict that parked this action was taken
+    # when the agent asked for it, which may have been hours ago: since then the
+    # day's budget may have been spent elsewhere, or this customer may have been
+    # sent an offer by another campaign. Approving a stale proposal must not be
+    # a way around a bound — the merchant's approval satisfies the
+    # NEEDS_APPROVAL gate, it does not lift a hard cap.
+    verdict, rule = policy.check(ap.tool, args, db)
+    if verdict == policy.BLOCKED:
+        stale = audit.write_ahead(db, actor="merchant", tool=ap.tool, args=args,
+                                  reasoning=f"approval #{ap.id} re-checked at execution time",
+                                  verdict=verdict, rule=rule)
+        audit.complete(db, stale, status="blocked")
+        ap.status = "blocked"
+        ap.decided_ts = datetime.utcnow()
+        db.commit()
+        if entry:
+            audit.complete(db, entry, status="blocked", error=rule)
+        return {"approved": False, "verdict": verdict, "rule": rule,
+                "note": ("This was within bounds when the agent proposed it, but is not now. "
+                         "It was not executed.")}
+
     ap.status = "approved"
     ap.decided_ts = datetime.utcnow()
     db.commit()
