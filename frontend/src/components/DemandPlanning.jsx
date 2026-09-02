@@ -64,12 +64,32 @@ export default function DemandPlanning({ refresh }) {
             {peak.confidence === 'High' ? 'Very likely' : peak.confidence === 'Medium'
               ? 'Likely' : 'Possible'}
           </Badge>
+          {peak.holiday && <Badge tone="amber">{peak.holiday}</Badge>}
         </div>
 
         <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-100">
           {peak.day_name} {peak.window_label}
         </h3>
-        <p className="text-xs text-slate-500">{formatDate(peak.target_date)}</p>
+        <p className="text-xs text-slate-500">
+          {formatDate(peak.target_date)}
+          {peak.days_ahead === 1 ? ' · tomorrow' : ` · in ${peak.days_ahead} days`}
+        </p>
+
+        {peak.upcoming?.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] uppercase tracking-wide text-slate-500">After that</span>
+            {peak.upcoming.map((u) => (
+              <span
+                key={u.target_date}
+                className="rounded border border-slate-800 bg-slate-900/60 px-2 py-1 text-xs text-slate-400"
+              >
+                <span className="text-slate-300">{u.day_name}</span> {u.window_label}
+                <span className="ml-1.5 tabular-nums text-emerald-400/80">+{u.extra_orders}</span>
+                {u.holiday && <span className="ml-1.5 text-amber-400">{u.holiday}</span>}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="mt-4 flex flex-wrap items-end gap-x-10 gap-y-4 border-t border-slate-800 pt-4">
           <div>

@@ -72,12 +72,40 @@ def _slot_history(db) -> tuple[dict, dict]:
     return agg.slot_dates, agg.window_dates
 
 
+def _days_ahead(weekday: int, today: date) -> int:
+    """How many days until this weekday comes round again.
+
+    Today counts as seven, not zero: by the time anyone reads a plan the day is
+    already under way, and a kitchen cannot prepare for a window it is standing in.
+    """
+    ahead = (weekday - today.weekday()) % 7
+    return ahead or 7
+
+
 def _next_occurrence(weekday: int, window_start: int, today: date) -> date:
     """The next calendar date this slot comes round."""
-    ahead = (weekday - today.weekday()) % 7
-    if ahead == 0:
-        ahead = 7   # today's window may already have passed; plan for the next one
-    return today + timedelta(days=ahead)
+    return today + timedelta(days=_days_ahead(weekday, today))
+
+
+# Public holidays are calendar knowledge, not something order history can infer:
+# a merchant's own past cannot tell you that next Thursday is a national holiday.
+# Only fixed-date holidays are listed. Movable festivals — Diwali, Ugadi, Eid —
+# shift every year, and guessing their dates in code would be worse than leaving
+# them out, so they belong in a calendar feed the merchant connects.
+FIXED_HOLIDAYS = {
+    (1, 1):   "New Year's Day",
+    (1, 26):  "Republic Day",
+    (5, 1):   "Labour Day",
+    (8, 15):  "Independence Day",
+    (10, 2):  "Gandhi Jayanti",
+    (11, 1):  "Kannada Rajyotsava",
+    (12, 25): "Christmas Day",
+}
+
+
+def holiday_on(d: date) -> str | None:
+    """The public holiday falling on this date, if any."""
+    return FIXED_HOLIDAYS.get((d.month, d.day))
 
 
 def _confidence(observations: int, consistency: float) -> str:
@@ -100,7 +128,7 @@ def detect_peak(db, today: date | None = None,
         start: _median(list(counts.values())) for start, counts in per_window.items()
     }
 
-    best = None
+    candidates: list[dict] = []
     for (weekday, start), counts in per_slot.items():
         dated = sorted(counts.items())
         if len(dated) < MIN_OBSERVATIONS:
@@ -136,10 +164,35 @@ def detect_peak(db, today: date | None = None,
             "recent_counts": values[-CONSISTENCY_WINDOW:],
             "trend_up": len(values) >= 4 and _median(values[-4:]) > _median(values[:-4] or values),
             "target_date": _next_occurrence(weekday, start, today).isoformat(),
+            "days_ahead": _days_ahead(weekday, today),
         }
-        if best is None or candidate["expected_orders"] - candidate["baseline_orders"] > \
-                best["expected_orders"] - best["baseline_orders"]:
-            best = candidate
+        candidate["extra_orders"] = candidate["expected_orders"] - candidate["baseline_orders"]
+        candidate["holiday"] = holiday_on(date.fromisoformat(candidate["target_date"]))
+        candidates.append(candidate)
+
+    if not candidates:
+        return None
+
+    # Soonest first, and within a day the window with the most extra orders.
+    # Choosing the *largest* spike instead would pin the plan to one weekday for
+    # ever — a kitchen needs to know what is coming next, not what is biggest.
+    candidates.sort(key=lambda c: (c["days_ahead"], -c["extra_orders"]))
+    best = dict(candidates[0])
+
+    # One entry per upcoming day, so the page reads as a rolling calendar rather
+    # than a single fixed forecast.
+    by_day: dict[int, dict] = {}
+    for c in candidates:
+        keep = by_day.get(c["weekday"])
+        if keep is None or c["extra_orders"] > keep["extra_orders"]:
+            by_day[c["weekday"]] = c
+    best["upcoming"] = [
+        {k: c[k] for k in ("day_name", "window_label", "target_date", "days_ahead",
+                           "expected_orders", "baseline_orders", "extra_orders",
+                           "uplift_pct", "confidence", "holiday")}
+        for c in sorted(by_day.values(), key=lambda c: c["days_ahead"])
+        if c["target_date"] != best["target_date"]
+    ][:3]
     return best
 
 
@@ -355,6 +408,15 @@ def forecast(db, today: date | None = None) -> dict | None:
     if drivers:
         names = " and ".join(d["item"] for d in drivers[:2])
         evidence.append(f"{names} sell the most extra during this time.")
+    if peak.get("holiday"):
+        # Said plainly, with no number attached: the forecast is built from past
+        # ordinary weeks, so it has no way to price a holiday. Claiming a figure
+        # here would be inventing one.
+        evidence.append(
+            f"This one falls on {peak['holiday']}. The number below comes from "
+            f"ordinary {peak['day_name']}s, so treat it as a floor rather than a "
+            f"forecast — a public holiday can run busier than the usual pattern."
+        )
 
     return {
         "peak": peak,
