@@ -21,38 +21,21 @@ RevPulse reads a merchant's own customers, orders and feedback, and turns them i
 
 ## 1 · The problem
 
-There is a restaurant in Bengaluru doing **5,072 orders a month.**
+![Revenue leaks silently: a regular customer's orders thin out and stop, and nobody notices](docs/problem.png)
 
-One of its regulars is Manish. He ordered every 25 days, like clockwork, six times over. Then he stopped.
+**It is never a clean break, which is exactly why it is missed.** Take a real customer from the demo data. His gaps between orders ran **13 days, then 25, then 41, then 23, then 38** — the rhythm stretching out order by order — and then nothing at all. There is no moment where something went wrong, so there is no moment anyone could have reacted to.
 
-**Nothing happened.** No alert. No red number on any screen. The kitchen was busy, the tickets kept printing, and this month's revenue still looked healthy — because it *was* healthy. Manish is worth **₹5,540**, and against ₹25.5 lakh of monthly revenue that is **0.22%.** Invisible in any report ever written.
+Catching it needs *his* rhythm, not the restaurant's average. A weekly customer going quiet for a month means something a monthly customer going quiet for a month does not, so a single store-wide rule finds either everybody or nobody.
 
-Seventy-nine days later, nobody has called him. He has found somewhere else to eat.
-
-> ### That is the whole problem. Revenue does not leave loudly — it leaks, one good customer at a time, and every report says you are fine.
-
-Could the owner have caught it? Only by knowing that *Manish specifically* orders every 25 days — his own rhythm, not an average — and noticing he was three times past due. Now do that for **1,204 customers across 43,909 orders**, every day, while running a kitchen.
-
-Nobody does that by hand. So it never gets done, and the money quietly walks.
+And the loss hides inside a healthy month. He is worth **₹5,540** — against ₹25.5 lakh of monthly revenue, that is **0.22%.** No report has ever been built that shows a 0.22% dip, which is why every screen kept saying the business was fine.
 
 ## 2 · What RevPulse does
 
-Every merchant already owns the data that would catch this. It sits in their payments, their order history, their reviews. The gap is not data — it is that **a report tells you what happened, and then stops.**
+![How RevPulse works: data, AI reasoning, policy check, merchant approval, Razorpay, revenue attributed](docs/solution.png)
 
-```
-Dashboard    DATA ──► REPORT ──► the owner still has to work out what to do
+**None of this asks the merchant for anything new.** No extra forms, no tracking pixel, no new hardware — it runs entirely on the customers, orders, payments and reviews their Razorpay account and their own feedback already produce.
 
-RevPulse     DATA ──► AI REASONING ──► REVENUE OPPORTUNITY ──► ACTION ──► MEASUREMENT
-```
-
-RevPulse reads what the merchant already has — **purchase behaviour, transaction history, customer reviews, demand patterns and past campaign results** — and continuously answers four questions a report never does:
-
-- **Who needs attention** — this specific customer, by name
-- **Why they matter** — the evidence, in rupees
-- **What to do about it** — a concrete, priced action
-- **What it is worth** — and what it could cost if it goes wrong
-
-Then it does the one thing dashboards never do: **it carries the action through to the payment, and measures whether the money actually came back.**
+And nobody has to remember to run it. The agent scans on its own, and again whenever new feedback suggests a customer is unhappy — so the leak is found while it is still worth acting on.
 
 ---
 
@@ -60,7 +43,7 @@ Then it does the one thing dashboards never do: **it carries the action through 
 
 **This is the product.** A merchant does not need another chart. They need to know where next month's revenue is quietly disappearing, and what to do about it today.
 
-RevPulse finds **valuable customers whose buying pattern has broken** — someone who ordered like clockwork and has now been silent far longer than *their own* normal rhythm. Not a churn score. Not a segment. A named person, with the evidence that flagged them attached.
+RevPulse finds **valuable customers whose buying pattern is decaying** — someone whose orders have been thinning out and have now stopped for far longer than *their own* normal rhythm. Not a churn score. Not a segment. A named person, with the evidence that flagged them attached.
 
 ### This already works. It just isn't automated.
 
@@ -71,7 +54,7 @@ There is a restaurant near a cluster of student hostels that runs a near-permane
 > ### A high-value customer has gone quiet
 > **Manish Pillai** · Koramangala · lifetime value **₹5,540** · average order **₹923**
 >
-> Ordered **6 times**, typically every **25 days**. Last order was **79 days ago** — **3.2× his own normal gap.**
+> Ordered **6 times**, typically every **25 days** — a gap that stretched to 38 before the orders stopped altogether. Now silent for **more than 3× his own normal rhythm.**
 >
 > | | | |
 > |---|---|---|
@@ -113,15 +96,13 @@ Everything lands in **one place**: the Action Center. Every opportunity carries 
 
 ## 4 · The AI agent
 
-**The agent works without being asked.** It scans the merchant's data when the system starts, and again the moment new feedback suggests a customer is unhappy. Nobody types a prompt.
+![How the RevPulse agent works: collects data, understands behaviour, detects change, reasons over evidence, recommends, you approve](docs/ai-agent.png)
 
-For each run, it reads the data through its tools, assembles the evidence, prices the opportunity, and writes the recommendation in language an owner would actually use — always saying *why* it reached that conclusion, with the counts and gaps it relied on shown on the card.
-
-Then it stops. Because of one rule:
+Everything above is what the agent *asks for*. Nothing above is what it is *allowed to do* — and that gap is the whole design:
 
 > ## The model can ask for anything. It can never execute a money action.
 
-Between the agent's intent and any rupee moving sits a **deterministic policy engine** — ordinary business rules written in code, with no AI in them at all:
+Between the agent's intent and any rupee moving sits a **deterministic policy engine** — ordinary business rules written in code, with no AI in them at all. These are the actual limits it enforces:
 
 | | |
 |---|---|
