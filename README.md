@@ -21,7 +21,7 @@ RevPulse reads a merchant's own customers, orders and feedback, and turns them i
 
 ## 1 · The problem
 
-![Revenue leaks silently: a regular customer's orders thin out and stop, and nobody notices](docs/problem.png)
+![The problem](docs/problem.png)
 
 **It is never a clean break, which is exactly why it is missed.** Take a real customer from the demo data. His gaps between orders ran **13 days, then 25, then 41, then 23, then 38** — the rhythm stretching out order by order — and then nothing at all. There is no moment where something went wrong, so there is no moment anyone could have reacted to.
 
@@ -31,7 +31,7 @@ And the loss hides inside a healthy month. He is worth **₹5,540** — against 
 
 ## 2 · What RevPulse does
 
-![How RevPulse works: data, AI reasoning, policy check, merchant approval, Razorpay, revenue attributed](docs/solution.png)
+![How RevPulse works](docs/solution.png)
 
 **None of this asks the merchant for anything new.** No extra forms, no tracking pixel, no new hardware — it runs entirely on the customers, orders, payments and reviews their Razorpay account and their own feedback already produce.
 
@@ -96,7 +96,7 @@ Everything lands in **one place**: the Action Center. Every opportunity carries 
 
 ## 4 · The AI agent
 
-![How the RevPulse agent works: collects data, understands behaviour, detects change, reasons over evidence, recommends, you approve](docs/ai-agent.png)
+![The AI agent workflow](docs/ai-agent.png)
 
 Everything above is what the agent *asks for*. Nothing above is what it is *allowed to do* — and that gap is the whole design:
 
