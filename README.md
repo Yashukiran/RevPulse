@@ -66,6 +66,18 @@ RevPulse finds **valuable customers whose buying pattern is decaying** — someo
 
 There is a restaurant near a cluster of student hostels that runs a near-permanent offer on the delivery apps — and it works, because those students order when there is a discount and skip it when there isn't. The app pushes offers at the people most likely to take them, and the restaurant's revenue rises. **The mechanism is proven: the right offer, to the right customer, at the moment they are deciding.** What a merchant cannot do today is run that on their *own* customers, from their *own* payment data, without a platform doing it for them. RevPulse is that.
 
+### So why not leave it to the delivery apps?
+
+Because a platform runs this to grow **its own** revenue, and that is not the same job.
+
+**The economics point the other way.** A platform earns commission on the order it recovers, so it is happy to win a customer back onto the platform — even one who would have ordered direct next week at full margin. The merchant pays the commission *and* the discount.
+
+**It only sees its own slice.** Walk-ins, phone orders, the QR code on the counter, the merchant's own site — a delivery app sees none of it. RevPulse sits on Razorpay, underneath every channel the merchant takes money through.
+
+**And the merchant has no controls.** They cannot set the discount ceiling, approve a campaign before it goes out, see why a customer was chosen, or hold a group back to test whether the offer did anything. In RevPulse all four belong to them.
+
+**Most merchants have no platform doing this at all.** A dental clinic, a gym, a salon, a tuition centre — patients and clients drift away in exactly the same pattern, and nobody is watching for it. There the choice is not RevPulse instead of a platform. It is RevPulse instead of nothing.
+
 **This is a real opportunity from the live demo — the agent found it unprompted:**
 
 > ### A high-value customer has gone quiet
